@@ -1,0 +1,22 @@
+# 构建输出
+bin/
+obj/
+dist/
+src/UsbConfigEditor/wwwroot/
+
+# 前端依赖
+node_modules/
+
+# 运行时产物与日志
+*.log
+logs/
+
+# IDE / 临时文件
+.vs/
+*.user
+*.suo
+*.tmp
+
+# 系统
+Thumbs.db
+.DS_Store
