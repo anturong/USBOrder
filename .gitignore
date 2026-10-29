@@ -15,6 +15,9 @@ node_modules/
 *.log
 logs/
 
+# 本机运维脚本（含本机绝对路径，不入库）
+deploy/replace-install.ps1
+
 # IDE / 临时文件
 .vs/
 *.user
@@ -25,6 +28,6 @@ logs/
 Thumbs.db
 .DS_Store
 
-# ��������
+# ��������
 release/*.zip
 release/*.exe

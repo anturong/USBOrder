@@ -94,7 +94,7 @@ function Badge({
   tone = 'neutral',
   children,
 }: {
-  tone?: 'neutral' | 'green' | 'amber' | 'red' | 'blue'
+  tone?: 'neutral' | 'green' | 'amber' | 'red' | 'blue' | 'purple'
   children: React.ReactNode
 }) {
   const tones = {
@@ -103,6 +103,7 @@ function Badge({
     amber: 'bg-amber-50 text-amber-700 ring-amber-200',
     red: 'bg-red-50 text-red-700 ring-red-200',
     blue: 'bg-sky-50 text-sky-700 ring-sky-200',
+    purple: 'bg-violet-50 text-violet-700 ring-violet-200',
   }
   return (
     <span
@@ -136,7 +137,7 @@ function DeviceBadge({ device }: { device: Device }) {
     return (
       <Badge tone="amber">
         <AlertTriangle className="h-3 w-3" />
-        竞争失败{letter ? ` · 临时 ${letter}:` : ''}
+        占用分配{letter ? ` ${letter}:` : ''}
       </Badge>
     )
   if (device.status === 'conflict')
@@ -147,11 +148,27 @@ function DeviceBadge({ device }: { device: Device }) {
       </Badge>
     )
   return (
-    <Badge>
+    <Badge tone="purple">
       <CircleSlash className="h-3 w-3" />
-      未管理
+      自由分配{letter ? ` ${letter}:` : ''}
     </Badge>
   )
+}
+
+// 设备图标颜色：与状态徽章同色系，保证图标和状态文字视觉一致。
+function statusIconClass(status: string) {
+  switch (status) {
+    case 'assigned':
+      return 'text-emerald-600'
+    case 'ready':
+      return 'text-sky-600'
+    case 'competition':
+      return 'text-amber-600'
+    case 'conflict':
+      return 'text-red-600'
+    default:
+      return 'text-violet-600'
+  }
 }
 
 function Card({
@@ -618,7 +635,7 @@ export default function App() {
           </div>
           <div className="leading-tight">
             <div className="text-[13px] font-semibold text-neutral-900">USB 盘符管理</div>
-            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.1</div>
+            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.1.5</div>
           </div>
         </div>
 
@@ -766,14 +783,12 @@ export default function App() {
                       <th className="px-5 py-2 font-medium">设备</th>
                       <th className="px-3 py-2 font-medium">容量</th>
                       <th className="px-3 py-2 font-medium">序列号</th>
-                      <th className="px-3 py-2 font-medium">盘符</th>
-                      <th className="px-3 py-2 font-medium">状态</th>
                     </tr>
                   </thead>
                   <tbody>
                     {devices.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-5 py-8 text-center text-xs text-neutral-500">
+                        <td colSpan={3} className="px-5 py-8 text-center text-xs text-neutral-500">
                           当前没有插入 USB 设备
                         </td>
                       </tr>
@@ -785,7 +800,7 @@ export default function App() {
                           key={device.id}
                           onClick={() => setSelectedId(device.id)}
                           className={cx(
-                            'cursor-pointer border-b border-neutral-100 last:border-0',
+                            'group cursor-pointer border-b border-neutral-100 last:border-0',
                             active ? 'bg-sky-100' : 'hover:bg-neutral-50',
                           )}
                         >
@@ -793,9 +808,22 @@ export default function App() {
                             {active && (
                               <span className="absolute inset-y-0 left-0 w-[3px] rounded-r bg-sky-600" />
                             )}
+                            <div className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-1 opacity-0 transition-opacity group-hover:opacity-100">
+                              <div className="rounded-md bg-white px-2 py-1 shadow-lg ring-1 ring-neutral-200">
+                                <DeviceBadge device={device} />
+                              </div>
+                            </div>
                             <div className="flex items-center gap-2.5">
+                              <span
+                                className={cx(
+                                  'font-mono text-[13px] font-medium leading-none',
+                                  statusIconClass(device.status),
+                                )}
+                              >
+                                {device.letters[0] ? `${device.letters[0]}:` : '—'}
+                              </span>
                               <div className="flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 bg-white">
-                                <HardDrive className="h-3.5 w-3.5 text-neutral-500" />
+                                <HardDrive className={cx('h-3.5 w-3.5', statusIconClass(device.status))} />
                               </div>
                               <div>
                                 <div
@@ -814,14 +842,6 @@ export default function App() {
                           </td>
                           <td className="px-3 py-3 font-mono text-xs text-neutral-600">
                             {device.serial || '—'}
-                          </td>
-                          <td className="px-3 py-3">
-                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-neutral-200 bg-white px-1.5 font-mono text-xs text-neutral-800">
-                              {device.letters[0] ? `${device.letters[0]}:` : '—'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3">
-                            <DeviceBadge device={device} />
                           </td>
                         </tr>
                       )
@@ -901,7 +921,12 @@ export default function App() {
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 bg-white">
-                              <HardDrive className="h-3.5 w-3.5 text-neutral-500" />
+                              <HardDrive
+                                className={cx(
+                                  'h-3.5 w-3.5',
+                                  deviceForRule(rule) ? 'text-emerald-600' : 'text-neutral-400',
+                                )}
+                              />
                             </div>
                             <div
                               className="font-medium text-neutral-900"
