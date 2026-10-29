@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -7,6 +7,7 @@ import {
   HardDrive,
   LayoutDashboard,
   ListChecks,
+  LogOut,
   Play,
   Plus,
   RefreshCw,
@@ -208,13 +209,23 @@ function InstallDialog({
 }: {
   open: boolean
   onClose: () => void
-  onSubmit: (mode: 'existing' | 'create', account: string, password: string) => void
+  onSubmit: (mode: 'existing' | 'create', account: string, password: string) => Promise<void>
 }) {
+  const [step, setStep] = useState<1 | 2 | 3>(1)
   const [mode, setMode] = useState<'existing' | 'create'>('existing')
   const [account, setAccount] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
+  const [installing, setInstalling] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setStep(1)
+      setError('')
+      setInstalling(false)
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -224,96 +235,191 @@ function InstallDialog({
     setError('')
   }
 
-  const submit = () => {
-    if (!account.trim()) return setError('账号不能为空')
-    if (!password) return setError('密码不能为空')
+  const validate = () => {
+    if (!account.trim()) return '账号不能为空'
+    if (!password) return '密码不能为空'
     if (mode === 'create') {
-      if (password.length < 12) return setError('新建账号的密码至少 12 位')
-      if (password !== confirm) return setError('两次输入的密码不一致')
+      if (password.length < 12) return '新建账号的密码至少 12 位'
+      if (password !== confirm) return '两次输入的密码不一致'
+    }
+    return ''
+  }
+
+  const next = () => {
+    const message = validate()
+    if (message) {
+      setError(message)
+      return
     }
     setError('')
-    onSubmit(mode, account.trim(), password)
+    setStep(2)
   }
+
+  const install = async () => {
+    setInstalling(true)
+    setError('')
+    try {
+      await onSubmit(mode, account.trim(), password)
+      setStep(3)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure))
+    } finally {
+      setInstalling(false)
+    }
+  }
+
+  const title = step === 3 ? '安装完成' : step === 2 ? '确认安装' : '安装服务'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/30 p-6">
       <div className="w-[460px] rounded-lg border border-neutral-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3.5">
-          <h3 className="text-sm font-semibold text-neutral-900">安装服务</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+            {step < 3 && (
+              <span className="text-[11px] text-neutral-400">
+                第 {step} / 2 步
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="rounded p-1 text-neutral-400 hover:bg-neutral-100">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="space-y-3 px-5 py-4">
-          <div className="grid grid-cols-2 gap-2 rounded-md bg-neutral-100 p-1">
-            {(
-              [
-                ['existing', '使用已有账号'],
-                ['create', '新建专用账号'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => switchMode(value)}
-                className={cx(
-                  'h-8 rounded text-[13px] font-medium transition-colors',
-                  mode === value ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-800',
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        {step === 1 && (
+          <div className="space-y-3 px-5 py-4">
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ['existing', '使用已有账号', '用本机管理员账号登录服务'],
+                  ['create', '新建专用账号', '新建一个只跑服务的账号'],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  onClick={() => switchMode(value)}
+                  className={cx(
+                    'rounded-lg border p-3 text-left transition-colors',
+                    mode === value
+                      ? 'border-neutral-900 bg-neutral-50'
+                      : 'border-neutral-200 hover:border-neutral-300',
+                  )}
+                >
+                  <div className="text-[13px] font-medium text-neutral-900">{label}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-neutral-500">{hint}</div>
+                </button>
+              ))}
+            </div>
 
-          <label className="block text-xs text-neutral-500">
-            {mode === 'existing' ? '账号（本机账号或 DOMAIN\\user）' : '专用账号名'}
-            <input
-              value={account}
-              onChange={(event) => setAccount(event.target.value)}
-              placeholder={mode === 'existing' ? '例如 anturong 或 CORP\\svc_usb' : '例如 UsbDriveMgrSvc'}
-              className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
-            />
-          </label>
-
-          <label className="block text-xs text-neutral-500">
-            {mode === 'existing' ? '该账号的密码' : '密码（至少 12 位，永不过期）'}
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
-            />
-          </label>
-
-          {mode === 'create' && (
             <label className="block text-xs text-neutral-500">
-              确认密码
+              {mode === 'existing' ? '账号（本机账号或 DOMAIN\\user）' : '专用账号名'}
               <input
-                type="password"
-                value={confirm}
-                onChange={(event) => setConfirm(event.target.value)}
+                value={account}
+                onChange={(event) => setAccount(event.target.value)}
+                placeholder={mode === 'existing' ? '例如 anturong 或 CORP\\svc_usb' : '例如 UsbDriveMgrSvc'}
                 className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
               />
             </label>
-          )}
 
-          {error ? <div className="text-xs text-red-600">{error}</div> : null}
+            <label className="block text-xs text-neutral-500">
+              {mode === 'existing' ? '该账号的密码' : '密码（至少 12 位，永不过期）'}
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
+              />
+            </label>
 
-          <p className="text-[11px] leading-relaxed text-neutral-500">
-            {mode === 'existing'
-              ? '只验证并补授“作为服务登录”，不会修改该账号的密码或标志位。账号必须已在 Administrators 组，密码建议设为永不过期。'
-              : '会新建本机账号、加入 Administrators、授予“作为服务登录”并禁止交互登录，密码永不过期。'}
-          </p>
-        </div>
+            {mode === 'create' && (
+              <label className="block text-xs text-neutral-500">
+                确认密码
+                <input
+                  type="password"
+                  value={confirm}
+                  onChange={(event) => setConfirm(event.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
+                />
+              </label>
+            )}
+
+            {error ? <div className="text-xs text-red-600">{error}</div> : null}
+
+            <p className="text-[11px] leading-relaxed text-neutral-500">
+              {mode === 'existing'
+                ? '只验证并补授“作为服务登录”，不会修改该账号的密码或标志位。'
+                : '会新建本机账号、加入 Administrators、授予“作为服务登录”并禁止交互登录。'}
+            </p>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-3 px-5 py-4">
+            <div className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 text-[13px]">
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-neutral-500">方式</span>
+                <span className="text-neutral-900">
+                  {mode === 'existing' ? '使用已有账号登录' : '新建专用账号'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-neutral-500">账号</span>
+                <span className="font-mono text-xs text-neutral-900">{account.trim()}</span>
+              </div>
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-neutral-500">服务目录</span>
+                <span className="font-mono text-[11px] text-neutral-700">
+                  C:\Program Files\UsbDriveManager\service
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] leading-relaxed text-neutral-500">
+              安装会先停掉旧服务，再按上面的账号注册并启动；配置和日志不受影响。
+            </p>
+
+            {error ? <div className="text-xs text-red-600 whitespace-pre-wrap">{error}</div> : null}
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-3 px-5 py-6 text-center">
+            <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
+            <div className="text-sm font-medium text-neutral-900">已登录：{account.trim()}</div>
+            <div className="text-xs text-neutral-500">服务已安装并启动，插拔 U 盘会按规则分配盘符。</div>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 border-t border-neutral-100 px-5 py-3">
-          <Button size="sm" onClick={onClose}>
-            取消
-          </Button>
-          <Button size="sm" variant="primary" onClick={submit}>
-            安装
-          </Button>
+          {step === 1 && (
+            <>
+              <Button size="sm" onClick={onClose}>
+                取消
+              </Button>
+              <Button size="sm" variant="primary" onClick={next}>
+                下一步
+              </Button>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <Button size="sm" disabled={installing} onClick={() => setStep(1)}>
+                上一步
+              </Button>
+              <Button size="sm" variant="primary" disabled={installing} onClick={() => void install()}>
+                {installing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}
+                {installing ? '正在安装…' : '安装并启动'}
+              </Button>
+            </>
+          )}
+
+          {step === 3 && (
+            <Button size="sm" variant="primary" onClick={onClose}>
+              完成
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -363,6 +469,7 @@ function upsertRule(current: Rule[], device: Device, letter: string): Rule[] {
 export default function App() {
   const [tab, setTab] = useState<'overview' | 'devices' | 'rules' | 'settings'>('overview')
   const [status, setStatus] = useState<Status | null>(null)
+  const lastServiceState = useRef('')
   const [devices, setDevices] = useState<Device[]>([])
   const [usedLetters, setUsedLetters] = useState<string[]>([])
   const [rules, setRules] = useState<Rule[]>([])
@@ -401,6 +508,7 @@ export default function App() {
     ])
 
     setStatus(nextStatus)
+    lastServiceState.current = nextStatus.state
     setDevices(deviceResult.devices)
     setUsedLetters(deviceResult.usedLetters)
     setRules(configResult.rules)
@@ -434,6 +542,46 @@ export default function App() {
     void run(refresh)
   }, [run, refresh])
 
+  // 服务被重启（不管是谁触发的）→ 状态变化时自动刷新设备与盘符占用。
+  useEffect(() => {
+    let cancelled = false
+
+    const check = async () => {
+      try {
+        const next = await call<Status>('getStatus')
+        if (cancelled) {
+          return
+        }
+
+        const previous = lastServiceState.current
+        lastServiceState.current = next.state
+
+        if (previous && previous !== next.state) {
+          await refresh()
+        }
+      } catch {
+        // 轮询失败就等下一轮，不打扰用户。
+      }
+    }
+
+    const timer = window.setInterval(check, 4000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [refresh])
+
+  // 切回窗口时也刷新一次（外部改盘符、插拔后回来能看到最新状态）。
+  useEffect(() => {
+    const onFocus = () => {
+      void refresh().catch(() => undefined)
+    }
+
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refresh])
+
   const letterOptions = useMemo(
     () => LETTERS.map((letter) => ({ letter, used: usedLetters.includes(letter) })),
     [usedLetters],
@@ -460,6 +608,8 @@ export default function App() {
         notify('ok', result.message)
       }
 
+      // 等服务把卷信息和盘符占用稳定下来，再刷新一次，避免还显示旧的“占用中”。
+      await new Promise((resolve) => window.setTimeout(resolve, 1200))
       await refresh()
     })
 
@@ -472,6 +622,11 @@ export default function App() {
           ? `已保存${result.restarted ? '并重启服务' : ''}：${result.warnings[0]}`
           : `已保存${result.restarted ? '并重启服务' : ''}`,
       )
+
+      if (result.restarted) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1200))
+      }
+
       await refresh()
     })
 
@@ -884,33 +1039,50 @@ export default function App() {
               </Card>
 
               <Card
-                title="卸载服务"
-                description="停止并删除服务定义；配置、日志与服务账号都会保留，重装后规则还在"
+                title="账号与服务"
+                description="当前运行服务的账号；退出登录会卸载服务，然后用另一个账号重新安装"
               >
-                <div className="flex items-center justify-between gap-6 px-5 py-4">
+                <div className="divide-y divide-neutral-100 text-[13px]">
+                  <div className="flex items-center justify-between gap-6 px-5 py-3">
+                    <span className="shrink-0 text-neutral-500">已登录账号</span>
+                    <span className="truncate font-mono text-xs text-neutral-900">
+                      {status?.account || '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-6 px-5 py-3">
+                    <span className="shrink-0 text-neutral-500">服务状态</span>
+                    <span className="text-xs text-neutral-800">
+                      {serviceInstalled ? (serviceRunning ? '运行中' : '已停止') : '未安装'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-6 border-t border-neutral-100 px-5 py-4">
                   <div className="text-xs text-neutral-500">
                     {serviceInstalled
-                      ? '卸载后服务不再监听插拔，盘符保持当前状态。'
-                      : '当前没有安装服务。'}
+                      ? '退出登录 = 停止并删除服务；配置、日志和账号都保留。'
+                      : '当前未登录（没有安装服务）。'}
                   </div>
-                  <Button
-                    size="sm"
-                    disabled={!serviceInstalled || busy}
-                    className="border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50"
-                    onClick={() =>
-                      run(async () => {
-                        if (!window.confirm('将停止并删除服务（配置与日志保留）。确定继续？')) {
-                          return
-                        }
-                        await call('uninstallService')
-                        notify('ok', '服务已卸载')
-                        await refresh()
-                      })
-                    }
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    卸载服务
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!serviceInstalled || busy}
+                      className="border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50"
+                      onClick={() =>
+                        run(async () => {
+                          if (!window.confirm('将停止并删除服务，然后用另一个账号重新安装。继续？')) {
+                            return
+                          }
+                          await call('uninstallService')
+                          await refresh()
+                          setInstallOpen(true)
+                        })
+                      }
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      退出登录
+                    </Button>
+                  </div>
                 </div>
               </Card>
             </div>
@@ -921,17 +1093,10 @@ export default function App() {
       <InstallDialog
         open={installOpen}
         onClose={() => setInstallOpen(false)}
-        onSubmit={(mode, account, password) =>
-          run(async () => {
-            const result = await call<{ warnings: string[] }>('installService', { mode, account, password })
-            setInstallOpen(false)
-            notify(
-              'ok',
-              result.warnings?.length ? `服务已安装：${result.warnings[0]}` : '服务已安装并启动',
-            )
-            await refresh()
-          })
-        }
+        onSubmit={async (mode, account, password) => {
+          await call('installService', { mode, account, password })
+          await refresh()
+        }}
       />
 
       {toast && (

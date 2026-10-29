@@ -2,7 +2,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="USB 盘符管理器"
            Manufacturer="UsbDriveManager"
-           Version="0.1.1"
+           Version="0.1.2"
            UpgradeCode="6D2F6E58-8D5B-4E2A-9C47-3B1F0C5D7A21"
            Scope="perMachine"
            Compressed="yes">

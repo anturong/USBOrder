@@ -32,6 +32,15 @@ internal static class ServicePayload
         var target = ServiceManager.InstallDirectory;
         Directory.CreateDirectory(target);
 
+        // 编辑器就是从目标目录的上一级运行时，source 和 target 可能重合，直接跳过复制。
+        if (string.Equals(
+                Path.GetFullPath(source).TrimEnd('\\'),
+                Path.GetFullPath(target).TrimEnd('\\'),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.Combine(target, "UsbDriveService.exe");
+        }
+
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(source, file);

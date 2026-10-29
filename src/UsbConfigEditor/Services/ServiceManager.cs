@@ -16,8 +16,15 @@ internal static class ServiceManager
 
     private const uint ServiceDelete = 0x00010000;
 
+    /// <summary>
+    /// 服务单独放在 Program Files\UsbDriveManager\service，避免和编辑器自己的运行时 dll
+    /// （clrjit.dll 等）同名冲突：编辑器运行时这些文件被占用，覆盖会失败。
+    /// </summary>
     public static string InstallDirectory
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "UsbDriveManager");
+        => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "UsbDriveManager",
+            "service");
 
     public static string InstalledExePath => Path.Combine(InstallDirectory, "UsbDriveService.exe");
 
