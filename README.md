@@ -39,6 +39,55 @@ UsbDriveManager/
 **当前交付形态**：`dist\UsbConfigEditor.exe`（编辑器，自包含）+ `dist\service\UsbDriveService.exe`（服务，自包含）。
 
 
+## 从源码复现构建
+
+### 环境要求
+
+| 依赖 | 版本 | 用途 |
+|---|---|---|
+| Windows | 10 / 11 x64 | 目标平台 |
+| .NET SDK | 8.0+ | 编译 Core / 服务 / 编辑器 |
+| Node.js + npm | 20+ | 构建 WebView2 前端（`src/UsbConfigEditor.Web`） |
+| Inno Setup | 7.x（可选） | 只有生成 `setup.exe` 需要；`ISCC.exe` 在 PATH 或默认安装目录 |
+
+NuGet 直连慢时可给所有脚本加 `-NugetSource https://repo.huaweicloud.com/repository/nuget/v3/index.json`，
+前端可用 `npm config set registry https://registry.npmmirror.com`。
+
+### 一条命令出发布目录
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\publish.ps1
+```
+
+脚本会：`npm install`（首次）+ `npm run build` → 把前端产物写进
+`src/UsbConfigEditor/wwwroot` → 发布编辑器与服务（win-x64 自包含）到 `dist\`。
+已有 `node_modules` 或只想重发后端时加 `-SkipFrontend`。
+
+### 出安装包
+
+```powershell
+# MSI（静默部署，无交互界面）
+powershell -ExecutionPolicy Bypass -File .\deploy\build-msi.ps1 -Version 0.1.4
+
+# setup.exe（Inno Setup 图形安装包，需先装 Inno Setup 7）
+powershell -ExecutionPolicy Bypass -File .\deploy\build-inno.ps1 -Version 0.1.4
+```
+
+产物都在 `release\`：
+
+```
+release\
+├── USBOrder-<版本>-setup.exe          图形安装包（推荐）
+├── USBOrder-<版本>-win-x64.msi        MSI（静默）
+└── USBOrder-<版本>-portable-win-x64.zip  绿色版（用 tar/压缩工具把 dist 打包）
+```
+
+版本号只传 `-Version`，WiX 通过 `ProductVersion` 属性注入，不再改源码。
+
+> 仓库里**不含**这些自动生成物：`dist/`、`bin/`、`obj/`、`node_modules/`、
+> `src/UsbConfigEditor/wwwroot/`、`installer/Generated.wxs`、`*.msi`、`*.exe`、`*.zip`。
+> 它们都能由上面的命令重新生成。
+
 ## 构建
 
 ```powershell

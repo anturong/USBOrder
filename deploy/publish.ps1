@@ -22,7 +22,10 @@ param(
 
     [string]$Output = '',
 
-    [string]$NugetSource = ''
+    [string]$NugetSource = '',
+
+    # wwwroot 不在仓库里，默认先跑 npm 构建；只想重新发布后端时加 -SkipFrontend。
+    [switch]$SkipFrontend
 )
 
 Set-StrictMode -Version Latest
@@ -63,12 +66,39 @@ function Invoke-Publish([string]$Project, [string]$Target) {
     if ($LASTEXITCODE -ne 0) { throw "发布失败：$Project" }
 }
 
+# 前端产物（wwwroot）不进仓库，发布前必须重新构建。
+if (-not $SkipFrontend) {
+    Write-Step '构建前端（npm）'
+    $webProject = Join-Path $root 'src\UsbConfigEditor.Web'
+    if (-not (Test-Path (Join-Path $webProject 'node_modules'))) {
+        Push-Location $webProject
+        try {
+            & npm.cmd install --no-audit --no-fund
+            $installExit = $LASTEXITCODE
+        }
+        finally {
+            Pop-Location
+        }
+
+        if ($installExit -ne 0) { throw 'npm install 失败' }
+    }
+
+    Push-Location $webProject
+    try {
+        & npm.cmd run build
+        $buildExit = $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+
+    if ($buildExit -ne 0) { throw '前端构建失败' }
+}
+
 Write-Step "清理输出目录 $Output"
 if (Test-Path $Output) {
     Remove-Item -LiteralPath $Output -Recurse -Force
-}
-
-$null = New-Item -ItemType Directory -Path $Output -Force
+}$null = New-Item -ItemType Directory -Path $Output -Force
 $serviceOutput = Join-Path $Output 'service'
 
 Write-Step '发布编辑器（自包含 win-x64）'

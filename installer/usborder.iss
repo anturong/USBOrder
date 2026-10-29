@@ -1,8 +1,10 @@
 ﻿; USBOrder 安装脚本（Inno Setup 7）
 ; 编译：ISCC.exe usborder.iss
 
+#ifndef AppVersion
+  #define AppVersion "0.1.4"
+#endif
 #define AppName "USB 盘符管理器"
-#define AppVersion "0.1.4"
 #define AppPublisher "USBOrder"
 #define AppExe "UsbConfigEditor.exe"
 
