@@ -18,9 +18,28 @@ public sealed class WebViewForm : Form
         MinimumSize = new Size(1100, 700);
         Size = new Size(1240, 800);
         BackColor = Color.FromArgb(0xFA, 0xFA, 0xFA);
+        Icon = LoadAppIcon();
 
         Controls.Add(_webView);
         Load += async (_, _) => await InitializeAsync();
+    }
+
+    private static Icon? LoadAppIcon()
+    {
+        try
+        {
+            var executable = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(executable))
+            {
+                return Icon.ExtractAssociatedIcon(executable);
+            }
+        }
+        catch
+        {
+            // 取不到就用默认图标，不影响启动。
+        }
+
+        return null;
     }
 
     private async Task InitializeAsync()

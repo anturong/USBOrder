@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     生成 MSI 安装包：先扫描 dist 生成 WiX 片段，再编译成 MSI。
