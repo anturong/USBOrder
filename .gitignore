@@ -4,6 +4,10 @@ obj/
 dist/
 src/UsbConfigEditor/wwwroot/
 
+# 安装包产物
+*.msi
+installer/Generated.wxs
+
 # 前端依赖
 node_modules/
 

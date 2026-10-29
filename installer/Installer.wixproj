@@ -1,0 +1,7 @@
+<Project Sdk="WixToolset.Sdk/4.0.5">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <TargetName>UsbDriveManager</TargetName>
+  </PropertyGroup>
+</Project>

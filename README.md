@@ -72,6 +72,26 @@ dist\
 > 构建时会出现一条 `MSB3277`（WindowsBase 版本冲突）警告：WebView2 包同时带了 WPF 程序集，
 > 与 WinForms 引用的版本号不同。实际只用 WinForms 那套，警告可忽略。
 
+## 打包（MSI 安装包）
+
+```powershell
+# 先出 dist
+powershell -ExecutionPolicy Bypass -File .\deploy\publish.ps1
+# 再生成 MSI（需要联网还原 WixToolset.Sdk，可加 -NugetSource 走镜像）
+powershell -ExecutionPolicy Bypass -File .\deploy\build-msi.ps1
+```
+
+产物：项目根目录 `UsbDriveManager-0.1.0.msi`（约 69 MB，cab 内嵌）。
+
+安装内容：
+- 文件解到 `C:\Program Files\UsbDriveManager`（编辑器 + `service\` + `wwwroot\`）；
+- **开始菜单**和**桌面**各一个「USB 盘符管理器」快捷方式，指向编辑器（manifest 要求管理员，双击会弹 UAC）；
+- 不注册服务——服务仍由编辑器里的「安装服务」按钮注册，这样账号/密码选择留在界面上。
+
+> 如果机器上已经注册过服务，`Program Files\UsbDriveManager\UsbDriveService.exe` 可能正被占用：
+> 先停服务再装 MSI，或让安装程序按提示重启后替换。
+
+
 ## 自检（不写任何系统状态）
 
 ```powershell
