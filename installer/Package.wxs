@@ -2,14 +2,14 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="USB 盘符管理器"
            Manufacturer="UsbDriveManager"
-           Version="0.1.3"
+           Version="0.1.4"
            UpgradeCode="6D2F6E58-8D5B-4E2A-9C47-3B1F0C5D7A21"
            Scope="perMachine"
+           Codepage="65001"
            Compressed="yes">
 
     <MajorUpgrade DowngradeErrorMessage="已安装更新版本，请先在“应用和功能”里卸载旧版。" />
     <MediaTemplate EmbedCab="yes" />
-
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="UsbDriveManager" />
     </StandardDirectory>

@@ -27,3 +27,4 @@ Thumbs.db
 
 # 发布产物
 release/*.zip
+release/*.exe
