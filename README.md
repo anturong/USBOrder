@@ -8,6 +8,12 @@
 - **UsbConfigEditor.exe** —— WebView2 + React 编辑器，唯一管理入口：服务安装、规则、手动改盘符（已完成）
 - **UsbConfig.Core.dll** —— 共享库：配置模型、设备指纹、冲突检测、改盘符（**已完成**）
 
+## 界面预览
+
+![概览](https://cdn.jsdelivr.net/gh/anturong/USBOrder@main/docs/screenshots/overview.png)
+
+![设置](https://cdn.jsdelivr.net/gh/anturong/USBOrder@main/docs/screenshots/settings.png)
+
 ```
 UsbDriveManager/
 ├── UsbDriveManager.sln
