@@ -1,9 +1,11 @@
-# UsbDriveManager
+# USBOrder · USB 盘符管理器
 
 给无人值守 Windows 机器用的 U 盘盘符自动管理工具。
 
+仓库：<https://github.com/anturong/USBOrder>
+
 - **UsbDriveService.exe** —— Windows 服务，监听插拔、按规则分配固定盘符（已完成）
-- **UsbConfigEditor.exe** —— WinForms 配置编辑器，唯一管理入口（服务管理已完成，规则编辑进行中）
+- **UsbConfigEditor.exe** —— WebView2 + React 编辑器，唯一管理入口：服务安装、规则、手动改盘符（已完成）
 - **UsbConfig.Core.dll** —— 共享库：配置模型、设备指纹、冲突检测、改盘符（**已完成**）
 
 ```
@@ -11,7 +13,7 @@ UsbDriveManager/
 ├── UsbDriveManager.sln
 ├── src/UsbConfig.Core/          共享库（net8.0-windows）
 ├── src/UsbDriveService/         Windows 服务
-├── src/UsbConfigEditor/         WinForms 编辑器（自包含发布，manifest 要求管理员）
+├── src/UsbConfigEditor/         WebView2 编辑器（自包含发布，manifest 要求管理员）
 ├── tests/UsbConfig.Core.Tests/  xUnit 单测
 ├── tools/CoreSmoke/             只读自检工具（现场排障用）
 └── deploy/                      服务安装/卸载脚本（编辑器之外的等价实现）
