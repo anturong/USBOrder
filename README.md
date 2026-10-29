@@ -10,9 +10,9 @@
 
 ## 界面预览
 
-![概览](https://cdn.jsdelivr.net/gh/anturong/USBOrder@main/docs/screenshots/overview.png)
+![概览](https://raw.githubusercontent.com/anturong/USBOrder/main/docs/screenshots/overview.png)
 
-![设置](https://cdn.jsdelivr.net/gh/anturong/USBOrder@main/docs/screenshots/settings.png)
+![设置](https://raw.githubusercontent.com/anturong/USBOrder/main/docs/screenshots/settings.png)
 
 ```
 UsbDriveManager/

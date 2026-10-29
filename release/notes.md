@@ -28,9 +28,9 @@ Windows 无人值守机器用的 U 盘盘符管理工具：按设备指纹（VID
 
 **编辑器**：
 
-![概览](https://cdn.jsdelivr.net/gh/anturong/USBOrder@main/docs/screenshots/overview.png)
+![概览](https://raw.githubusercontent.com/anturong/USBOrder/main/docs/screenshots/overview.png)
 
-![安装向导](https://cdn.jsdelivr.net/gh/anturong/USBOrder@main/docs/screenshots/wizard.png)
+![安装向导](https://raw.githubusercontent.com/anturong/USBOrder/main/docs/screenshots/wizard.png)
 
 ### 包含
 
