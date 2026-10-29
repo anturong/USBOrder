@@ -25,21 +25,43 @@ internal static class AccountManager
         var domain = qualified[..split];
         var user = qualified[(split + 1)..];
 
-        if (!NativeMethods.LogonUser(user, domain, password, NativeMethods.Logon32LogonInteractive, NativeMethods.Logon32ProviderDefault, out var token))
+        // 服务账号通常被禁止交互登录（SeDenyInteractiveLogonRight），所以先用网络登录校验密码，
+        // 失败再试服务登录；两者都不依赖交互式登录权限。
+        var logonTypes = new[]
         {
-            var error = Marshal.GetLastWin32Error();
-            var message = error switch
-            {
-                1326 => "账号或密码不正确。",
-                1331 => "该账号已被禁用。",
-                1907 => "该账号的密码已过期，请先改密。",
-                _ => $"账号验证失败（错误 {error}）。",
-            };
+            NativeMethods.Logon32LogonNetwork,
+            NativeMethods.Logon32LogonService,
+        };
 
-            throw new Win32Exception(error, message);
+        var lastError = 0;
+
+        foreach (var logonType in logonTypes)
+        {
+            if (NativeMethods.LogonUser(user, domain, password, logonType, NativeMethods.Logon32ProviderDefault, out var token))
+            {
+                NativeMethods.CloseHandle(token);
+                return;
+            }
+
+            lastError = Marshal.GetLastWin32Error();
+
+            // 密码错/账号禁用/密码过期：换登录类型也没用。
+            if (lastError is 1326 or 1331 or 1907)
+            {
+                break;
+            }
         }
 
-        NativeMethods.CloseHandle(token);
+        var message = lastError switch
+        {
+            1326 => "账号或密码不正确。",
+            1331 => "该账号已被禁用。",
+            1907 => "该账号的密码已过期，请先改密。",
+            1385 => "该账号不允许以所需方式登录（可能被策略限制），请换一个账号或检查本地安全策略。",
+            _ => $"账号验证失败（错误 {lastError}）。",
+        };
+
+        throw new Win32Exception(lastError, message);
     }
 
     public static bool IsAdministrator(string account)

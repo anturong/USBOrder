@@ -120,6 +120,8 @@ internal static class NativeMethods
     public static extern bool CloseHandle(IntPtr handle);
 
     public const int Logon32LogonInteractive = 2;
+    public const int Logon32LogonNetwork = 3;
+    public const int Logon32LogonService = 5;
     public const int Logon32ProviderDefault = 0;
     public const int LgIncludeIndirect = 1;
 

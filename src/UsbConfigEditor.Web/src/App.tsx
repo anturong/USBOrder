@@ -209,11 +209,10 @@ function InstallDialog({
 }: {
   open: boolean
   onClose: () => void
-  onSubmit: (mode: 'existing' | 'create', account: string, password: string) => Promise<void>
+  onSubmit: (account: string, password: string) => Promise<void>
 }) {
   const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [mode, setMode] = useState<'existing' | 'create'>('existing')
-  const [account, setAccount] = useState('')
+  const [account, setAccount] = useState('UsbDriveMgrSvc')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
@@ -229,19 +228,10 @@ function InstallDialog({
 
   if (!open) return null
 
-  const switchMode = (next: 'existing' | 'create') => {
-    setMode(next)
-    setAccount(next === 'create' ? 'UsbDriveMgrSvc' : '')
-    setError('')
-  }
-
   const validate = () => {
     if (!account.trim()) return '账号不能为空'
-    if (!password) return '密码不能为空'
-    if (mode === 'create') {
-      if (password.length < 12) return '新建账号的密码至少 12 位'
-      if (password !== confirm) return '两次输入的密码不一致'
-    }
+    if (password.length < 12) return '密码至少 12 位'
+    if (password !== confirm) return '两次输入的密码不一致'
     return ''
   }
 
@@ -259,7 +249,7 @@ function InstallDialog({
     setInstalling(true)
     setError('')
     try {
-      await onSubmit(mode, account.trim(), password)
+      await onSubmit(account.trim(), password)
       setStep(3)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
@@ -268,7 +258,7 @@ function InstallDialog({
     }
   }
 
-  const title = step === 3 ? '安装完成' : step === 2 ? '确认安装' : '安装服务'
+  const title = step === 3 ? '安装完成' : step === 2 ? '确认安装' : '新建专用账号'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/30 p-6">
@@ -276,11 +266,7 @@ function InstallDialog({
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3.5">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
-            {step < 3 && (
-              <span className="text-[11px] text-neutral-400">
-                第 {step} / 2 步
-              </span>
-            )}
+            {step < 3 && <span className="text-[11px] text-neutral-400">第 {step} / 2 步</span>}
           </div>
           <button onClick={onClose} className="rounded p-1 text-neutral-400 hover:bg-neutral-100">
             <X className="h-4 w-4" />
@@ -289,41 +275,22 @@ function InstallDialog({
 
         {step === 1 && (
           <div className="space-y-3 px-5 py-4">
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  ['existing', '使用已有账号', '用本机管理员账号登录服务'],
-                  ['create', '新建专用账号', '新建一个只跑服务的账号'],
-                ] as const
-              ).map(([value, label, hint]) => (
-                <button
-                  key={value}
-                  onClick={() => switchMode(value)}
-                  className={cx(
-                    'rounded-lg border p-3 text-left transition-colors',
-                    mode === value
-                      ? 'border-neutral-900 bg-neutral-50'
-                      : 'border-neutral-200 hover:border-neutral-300',
-                  )}
-                >
-                  <div className="text-[13px] font-medium text-neutral-900">{label}</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-neutral-500">{hint}</div>
-                </button>
-              ))}
-            </div>
+            <p className="text-[11px] leading-relaxed text-neutral-500">
+              会新建一个专供服务使用的本地账号：加入 Administrators、授予“作为服务登录”、禁止交互登录，密码永不过期。
+            </p>
 
             <label className="block text-xs text-neutral-500">
-              {mode === 'existing' ? '账号（本机账号或 DOMAIN\\user）' : '专用账号名'}
+              专用账号名
               <input
                 value={account}
                 onChange={(event) => setAccount(event.target.value)}
-                placeholder={mode === 'existing' ? '例如 anturong 或 CORP\\svc_usb' : '例如 UsbDriveMgrSvc'}
+                placeholder="例如 UsbDriveMgrSvc"
                 className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
               />
             </label>
 
             <label className="block text-xs text-neutral-500">
-              {mode === 'existing' ? '该账号的密码' : '密码（至少 12 位，永不过期）'}
+              密码（至少 12 位）
               <input
                 type="password"
                 value={password}
@@ -332,24 +299,20 @@ function InstallDialog({
               />
             </label>
 
-            {mode === 'create' && (
-              <label className="block text-xs text-neutral-500">
-                确认密码
-                <input
-                  type="password"
-                  value={confirm}
-                  onChange={(event) => setConfirm(event.target.value)}
-                  className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
-                />
-              </label>
-            )}
+            <label className="block text-xs text-neutral-500">
+              确认密码
+              <input
+                type="password"
+                value={confirm}
+                onChange={(event) => setConfirm(event.target.value)}
+                className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-2.5 text-[13px] text-neutral-900 outline-none focus:border-neutral-400"
+              />
+            </label>
 
             {error ? <div className="text-xs text-red-600">{error}</div> : null}
 
             <p className="text-[11px] leading-relaxed text-neutral-500">
-              {mode === 'existing'
-                ? '只验证并补授“作为服务登录”，不会修改该账号的密码或标志位。'
-                : '会新建本机账号、加入 Administrators、授予“作为服务登录”并禁止交互登录。'}
+              密码只用于服务登录，改密码需要重新安装服务；建议记在密码管理器里。
             </p>
           </div>
         )}
@@ -359,9 +322,7 @@ function InstallDialog({
             <div className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 text-[13px]">
               <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-neutral-500">方式</span>
-                <span className="text-neutral-900">
-                  {mode === 'existing' ? '使用已有账号登录' : '新建专用账号'}
-                </span>
+                <span className="text-neutral-900">新建专用账号</span>
               </div>
               <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-neutral-500">账号</span>
@@ -379,7 +340,7 @@ function InstallDialog({
               安装会先停掉旧服务，再按上面的账号注册并启动；配置和日志不受影响。
             </p>
 
-            {error ? <div className="text-xs text-red-600 whitespace-pre-wrap">{error}</div> : null}
+            {error ? <div className="whitespace-pre-wrap text-xs text-red-600">{error}</div> : null}
           </div>
         )}
 
@@ -1093,8 +1054,8 @@ export default function App() {
       <InstallDialog
         open={installOpen}
         onClose={() => setInstallOpen(false)}
-        onSubmit={async (mode, account, password) => {
-          await call('installService', { mode, account, password })
+        onSubmit={async (account, password) => {
+          await call('installService', { mode: 'create', account, password })
           await refresh()
         }}
       />
