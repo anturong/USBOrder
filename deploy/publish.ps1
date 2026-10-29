@@ -92,6 +92,16 @@ foreach ($required in @($editorExe, $serviceExe, $wwwroot)) {
     }
 }
 
+# 防回归：ServiceController 必须是 Windows 实现（约 87 KB），引用程序集只有 33 KB，
+# 打进去会导致界面上点“安装服务”抛 PlatformNotSupportedException。
+$serviceController = Join-Path $Output 'System.ServiceProcess.ServiceController.dll'
+if (Test-Path $serviceController) {
+    $controllerSize = (Get-Item $serviceController).Length
+    if ($controllerSize -lt 60000) {
+        throw "System.ServiceProcess.ServiceController.dll 是引用程序集（$controllerSize 字节），发布异常"
+    }
+}
+
 $size = (Get-ChildItem $Output -Recurse -File | Measure-Object -Property Length -Sum).Sum
 Write-Host ''
 Write-Host "编辑器   : $editorExe"
