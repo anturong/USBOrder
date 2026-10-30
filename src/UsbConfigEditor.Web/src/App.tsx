@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
-  MemoryStick,
   Play,
   Plus,
   RefreshCw,
@@ -632,9 +631,13 @@ export default function App() {
   const importRule = () =>
     run(async () => {
       if (!selected) throw new Error('先在上表选中一台设备。')
-      if (selected.partitions > 1) throw new Error('第一版只支持单分区设备，这台有多个分区。')
       setRules((current) => upsertRule(current, selected, draftLetter))
-      notify('ok', '已加入或更新规则，记得点“保存并重启服务”。')
+      notify(
+        'ok',
+        selected.partitions > 1
+          ? '已加入或更新规则（本版只处理第一个分区），记得点“保存并重启服务”。'
+          : '已加入或更新规则，记得点“保存并重启服务”。',
+      )
     })
 
   const patchRule = (id: string, patch: Partial<Rule>) =>
@@ -655,7 +658,7 @@ export default function App() {
           </div>
           <div className="leading-tight">
             <div className="text-[13px] font-semibold text-neutral-900">USB 盘符管理</div>
-            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.2.0</div>
+            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.2.5</div>
           </div>
         </div>
 
@@ -818,6 +821,13 @@ export default function App() {
                       {volumes.map((volume) => {
                         const used = volume.sizeBytes > 0 ? volume.sizeBytes - volume.freeBytes : 0
                         const ratio = volume.sizeBytes > 0 ? used / volume.sizeBytes : 0
+                        // 内置硬盘用灰色；USB 盘按「占用该盘符的设备」的状态着色（与设备/规则表一致），无设备时按自由分配（紫）。
+                        const owningDevice = volume.isUsb
+                          ? devices.find((device) => device.letters.includes(volume.letter))
+                          : undefined
+                        const volumeIconClass = !volume.isUsb
+                          ? 'text-neutral-400'
+                          : statusIconClass(owningDevice ? owningDevice.status : 'unmanaged')
                         return (
                           <tr key={volume.letter} className="group border-b border-neutral-50 last:border-0">
                             <td
@@ -829,11 +839,9 @@ export default function App() {
                                 <span className="font-mono text-[13px] font-medium text-neutral-900 group-hover:text-sky-600">
                                   {volume.letter}:
                                 </span>
-                                {volume.isUsb ? (
-                                  <MemoryStick className="h-4 w-4 text-sky-500" />
-                                ) : (
-                                  <HardDrive className="h-4 w-4 text-neutral-500" />
-                                )}
+                                <div className="flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 bg-white">
+                                  <HardDrive className={cx('h-3.5 w-3.5', volumeIconClass)} />
+                                </div>
                               </div>
                             </td>
                             <td className="px-3 py-3 text-neutral-800">

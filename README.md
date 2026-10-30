@@ -73,10 +73,10 @@ powershell -ExecutionPolicy Bypass -File .\deploy\publish.ps1
 
 ```powershell
 # MSI（静默部署，无交互界面）
-powershell -ExecutionPolicy Bypass -File .\deploy\build-msi.ps1 -Version 0.2.0
+powershell -ExecutionPolicy Bypass -File .\deploy\build-msi.ps1 -Version 0.2.5
 
 # setup.exe（Inno Setup 图形安装包，需先装 Inno Setup 7）
-powershell -ExecutionPolicy Bypass -File .\deploy\build-inno.ps1 -Version 0.2.0
+powershell -ExecutionPolicy Bypass -File .\deploy\build-inno.ps1 -Version 0.2.5
 ```
 
 产物都在 `release\`：

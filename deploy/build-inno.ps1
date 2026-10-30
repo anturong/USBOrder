@@ -13,7 +13,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = '0.2.0',
+    [string]$Version = '0.2.5',
 
     [string]$IsccPath = ''
 )

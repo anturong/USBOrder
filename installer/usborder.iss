@@ -2,7 +2,7 @@
 ; 编译：ISCC.exe usborder.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.2.5"
 #endif
 #define AppName "USB 盘符管理器"
 #define AppPublisher "USBOrder"
