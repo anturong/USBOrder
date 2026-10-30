@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MemoryStick,
   Play,
   Plus,
   RefreshCw,
@@ -54,6 +55,17 @@ type Rule = {
   serial: string
   target: string
   enabled: boolean
+}
+
+type Volume = {
+  letter: string
+  driveType: number
+  label: string
+  sizeBytes: number
+  freeBytes: number
+  isUsb: boolean
+  diskModel: string
+  fileSystem: string
 }
 
 type Toast = { kind: 'ok' | 'err'; text: string }
@@ -201,11 +213,15 @@ function StatCard({
   value,
   hint,
   icon,
+  valueClass,
+  hintClass,
 }: {
   label: string
   value: string
   hint: string
   icon: React.ReactNode
+  valueClass?: string
+  hintClass?: string
 }) {
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
@@ -213,8 +229,10 @@ function StatCard({
         <span className="text-xs font-medium text-neutral-500">{label}</span>
         <span className="text-neutral-400">{icon}</span>
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-neutral-900 tabular">{value}</div>
-      <div className="mt-1 text-xs text-neutral-500">{hint}</div>
+      <div className={cx('mt-2 text-2xl font-semibold tracking-tight tabular', valueClass ?? 'text-neutral-900')}>
+        {value}
+      </div>
+      <div className={cx('mt-1 text-xs', hintClass ?? 'text-neutral-500')}>{hint}</div>
     </div>
   )
 }
@@ -445,12 +463,13 @@ function upsertRule(current: Rule[], device: Device, letter: string): Rule[] {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<'overview' | 'devices' | 'rules' | 'settings'>('overview')
+  const [tab, setTab] = useState<'overview' | 'devices' | 'settings'>('overview')
   const [status, setStatus] = useState<Status | null>(null)
   const lastServiceState = useRef('')
   const [devices, setDevices] = useState<Device[]>([])
   const [usedLetters, setUsedLetters] = useState<string[]>([])
   const [rules, setRules] = useState<Rule[]>([])
+  const [volumes, setVolumes] = useState<Volume[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [draftLetter, setDraftLetter] = useState('U')
   const [saveAsRule, setSaveAsRule] = useState(true)
@@ -479,10 +498,11 @@ export default function App() {
       return
     }
 
-    const [nextStatus, deviceResult, configResult] = await Promise.all([
+    const [nextStatus, deviceResult, configResult, volumeResult] = await Promise.all([
       call<Status>('getStatus'),
       call<{ devices: Device[]; usedLetters: string[] }>('listDevices'),
       call<{ rules: Rule[] }>('loadConfig'),
+      call<{ volumes: Volume[] }>('listVolumes'),
     ])
 
     setStatus(nextStatus)
@@ -490,6 +510,7 @@ export default function App() {
     setDevices(deviceResult.devices)
     setUsedLetters(deviceResult.usedLetters)
     setRules(configResult.rules)
+    setVolumes(volumeResult.volumes)
 
     const firstFree = LETTERS.find((letter) => !deviceResult.usedLetters.includes(letter))
     if (firstFree) {
@@ -621,8 +642,7 @@ export default function App() {
 
   const nav = [
     { id: 'overview', label: '概览', icon: LayoutDashboard },
-    { id: 'devices', label: '设备', icon: HardDrive },
-    { id: 'rules', label: '规则', icon: ListChecks },
+    { id: 'devices', label: '设备与规则', icon: HardDrive },
     { id: 'settings', label: '设置', icon: Settings },
   ] as const
 
@@ -635,7 +655,7 @@ export default function App() {
           </div>
           <div className="leading-tight">
             <div className="text-[13px] font-semibold text-neutral-900">USB 盘符管理</div>
-            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.1.5</div>
+            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.2.0</div>
           </div>
         </div>
 
@@ -687,8 +707,7 @@ export default function App() {
           <div>
             <h1 className="text-[15px] font-semibold text-neutral-900">
               {tab === 'overview' && '概览'}
-              {tab === 'devices' && '设备'}
-              {tab === 'rules' && '规则'}
+              {tab === 'devices' && '设备与规则'}
               {tab === 'settings' && '设置'}
             </h1>
             <p className="text-xs text-neutral-500">
@@ -743,29 +762,112 @@ export default function App() {
 
         <div className="flex-1 overflow-auto px-6 py-5">
           {tab === 'overview' && (
-            <div className="grid grid-cols-3 gap-4">
-              <StatCard
-                label="服务状态"
-                value={serviceRunning ? '运行中' : serviceInstalled ? '已停止' : '未安装'}
-                hint={status?.installed ? 'UsbDriveService · 延迟自动启动' : '尚未注册服务'}
-                icon={<ShieldCheck className="h-4 w-4" />}
-              />
-              <StatCard
-                label="规则"
-                value={String(rules.length)}
-                hint={`${rules.filter((rule) => rule.enabled).length} 条启用`}
-                icon={<ListChecks className="h-4 w-4" />}
-              />
-              <StatCard
-                label="当前 USB 设备"
-                value={String(devices.length)}
-                hint={devices.length ? devices.map((device) => device.letters[0] ?? '—').join(' / ') : '未插入'}
-                icon={<Usb className="h-4 w-4" />}
-              />
-            </div>
+            <>
+              <div className="grid grid-cols-3 gap-4">
+                <StatCard
+                  label="服务状态"
+                  value={serviceRunning ? '运行中' : serviceInstalled ? '已停止' : '未安装'}
+                  hint={status?.installed ? 'UsbDriveService · 延迟自动启动' : '尚未注册服务'}
+                  valueClass={
+                    serviceRunning ? 'text-emerald-600' : serviceInstalled ? 'text-amber-500' : 'text-neutral-900'
+                  }
+                  hintClass={
+                    serviceRunning ? 'text-emerald-600' : serviceInstalled ? 'text-amber-500' : 'text-neutral-500'
+                  }
+                  icon={
+                    <ShieldCheck
+                      className={cx(
+                        'h-4 w-4',
+                        serviceRunning ? 'text-emerald-600' : serviceInstalled ? 'text-amber-500' : 'text-neutral-400',
+                      )}
+                    />
+                  }
+                />
+                <StatCard
+                  label="规则"
+                  value={String(rules.length)}
+                  hint={`${rules.filter((rule) => rule.enabled).length} 条启用`}
+                  icon={<ListChecks className="h-4 w-4" />}
+                />
+                <StatCard
+                  label="当前 USB 设备"
+                  value={String(devices.length)}
+                  hint={devices.length ? devices.map((device) => device.letters[0] ?? '—').join(' / ') : '未插入'}
+                  icon={<Usb className="h-4 w-4" />}
+                />
+              </div>
+
+              <div className="mt-5">
+                <Card title="所有磁盘" description="系统上已挂载的卷：内置硬盘与 U 盘用不同图标区分">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="border-b border-neutral-100 text-left text-xs text-neutral-500">
+                        <th className="px-5 py-2 font-medium">盘符</th>
+                        <th className="px-3 py-2 font-medium">名称</th>
+                        <th className="px-3 py-2 font-medium">占用 / 总容量</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {volumes.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-5 py-8 text-center text-xs text-neutral-500">
+                            未获取到磁盘信息
+                          </td>
+                        </tr>
+                      )}
+                      {volumes.map((volume) => {
+                        const used = volume.sizeBytes > 0 ? volume.sizeBytes - volume.freeBytes : 0
+                        const ratio = volume.sizeBytes > 0 ? used / volume.sizeBytes : 0
+                        return (
+                          <tr key={volume.letter} className="group border-b border-neutral-50 last:border-0">
+                            <td
+                              className="cursor-pointer px-5 py-3"
+                              onDoubleClick={() => run(async () => void (await call('openFolder', { path: `${volume.letter}:\\` })))}
+                              title="双击打开资源管理器"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span className="font-mono text-[13px] font-medium text-neutral-900 group-hover:text-sky-600">
+                                  {volume.letter}:
+                                </span>
+                                {volume.isUsb ? (
+                                  <MemoryStick className="h-4 w-4 text-sky-500" />
+                                ) : (
+                                  <HardDrive className="h-4 w-4 text-neutral-500" />
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-neutral-800">
+                              {volume.label || volume.diskModel || '—'}
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="relative flex items-center gap-2.5">
+                                <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-neutral-100">
+                                  <div
+                                    className="h-full rounded-full bg-sky-500"
+                                    style={{ width: `${Math.round(ratio * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="whitespace-nowrap text-xs text-neutral-600 tabular">
+                                  占用 {formatSize(used)} / {formatSize(volume.sizeBytes)}
+                                </span>
+                                <div className="pointer-events-none absolute bottom-full left-1/2 z-20 -translate-x-1/2 -translate-y-1 whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100">
+                                  <div className="rounded-md bg-white px-2 py-1 text-xs text-neutral-700 shadow-lg ring-1 ring-neutral-200">
+                                    可用 {formatSize(volume.freeBytes)}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </Card>
+              </div>
+            </>
           )}
 
-          {(tab === 'overview' || tab === 'devices') && (
+          {tab === 'devices' && (
             <div className="mt-5">
               <Card
                 title="当前插入的设备"
@@ -804,7 +906,16 @@ export default function App() {
                             active ? 'bg-sky-100' : 'hover:bg-neutral-50',
                           )}
                         >
-                          <td className="relative px-5 py-3">
+                          <td
+                            className="relative cursor-pointer px-5 py-3"
+                            title={device.letters[0] ? '双击打开资源管理器' : undefined}
+                            onDoubleClick={() => {
+                              const letter = device.letters[0]
+                              if (letter) {
+                                void run(async () => void (await call('openFolder', { path: `${letter}:\\` })))
+                              }
+                            }}
+                          >
                             {active && (
                               <span className="absolute inset-y-0 left-0 w-[3px] rounded-r bg-sky-600" />
                             )}
@@ -883,7 +994,7 @@ export default function App() {
             </div>
           )}
 
-          {(tab === 'overview' || tab === 'rules') && (
+          {tab === 'devices' && (
             <div className="mt-5">
               <Card
                 title="规则"

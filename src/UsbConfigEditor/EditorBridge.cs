@@ -68,6 +68,7 @@ internal sealed class EditorBridge
     {
         "getStatus" => GetStatus(),
         "listDevices" => ListDevices(),
+        "listVolumes" => ListVolumes(),
         "loadConfig" => LoadConfig(),
         "saveConfig" => SaveConfig(parameters),
         "assignLetter" => AssignLetter(parameters),
@@ -133,6 +134,26 @@ internal sealed class EditorBridge
         {
             devices = items,
             usedLetters = DriveLetterMap.GetUsedLetters().Select(letter => letter.ToString()).ToArray(),
+        };
+    }
+
+    private static object ListVolumes()
+    {
+        var volumes = new WmiAllVolumesEnumerator().Enumerate();
+
+        return new
+        {
+            volumes = volumes.Select(volume => new
+            {
+                letter = volume.Letter.ToString(),
+                driveType = volume.DriveType,
+                label = volume.Label,
+                sizeBytes = volume.SizeBytes,
+                freeBytes = volume.FreeBytes,
+                isUsb = volume.IsUsb,
+                diskModel = volume.DiskModel,
+                fileSystem = volume.FileSystem,
+            }).ToArray(),
         };
     }
 
