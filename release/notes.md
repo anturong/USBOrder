@@ -11,6 +11,13 @@ Windows 无人值守机器用的 U 盘盘符管理工具：按设备指纹（VID
 - 双击盘符所在整列打开资源管理器（单击选中设备、双击进入磁盘）。
 - 后端新增 `listVolumes` 命令：枚举 `Win32_LogicalDisk` 所有卷，USB 判定与分配逻辑一致。
 
+### 安装包
+
+| 文件 | SHA256 |
+|---|---|
+| `USBOrder-0.2.0-setup.exe` | `ba7aad0003cdd87906e3930f3b9f1fa2e5ff9410b78e2dc70bbf2b53092dc73b` |
+| `USBOrder-0.2.0-win-x64.msi` | `a77d161dd322dc78a311925ca5f1033476cd39668bb087c88e6d7a3472d55135` |
+
 ---
 
 ## USBOrder 0.1.5
