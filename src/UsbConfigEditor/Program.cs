@@ -20,8 +20,12 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
+        // --profile <name>：用独立的 WebView2 用户数据目录，便于多开调试/截图。
+        var profileIndex = Array.FindIndex(args, arg => arg.Equals("--profile", StringComparison.OrdinalIgnoreCase));
+        var profile = profileIndex >= 0 && profileIndex + 1 < args.Length ? args[profileIndex + 1] : "";
+
         // WebView2 承载 React 界面；旧的 WinForms 版 MainForm 保留作参考，不再启动。
-        Application.Run(new WebViewForm());
+        Application.Run(new WebViewForm(profile));
         return 0;
     }
 }

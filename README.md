@@ -12,6 +12,8 @@
 
 ![概览](https://raw.githubusercontent.com/anturong/USBOrder/main/docs/screenshots/overview.png)
 
+![设备与规则](https://raw.githubusercontent.com/anturong/USBOrder/main/docs/screenshots/devices.png)
+
 ![设置](https://raw.githubusercontent.com/anturong/USBOrder/main/docs/screenshots/settings.png)
 
 ```
@@ -39,6 +41,7 @@ UsbDriveManager/
 | Editor A1：服务状态/安装/卸载/启停（自包含、管理员） | ✅ |
 | Editor A2：规则编辑、从设备导入、指纹只读、校验、保存并重启（WebView2 + React） | ✅ |
 | Editor A3：现场手动改盘符 | ✅（强制覆盖竞争、多分区选择未做） |
+| 概览页：所有磁盘列表（盘符/名称/占用，按状态着色） | ✅ |
 | 打包：`deploy/publish.ps1` 一键产出 `dist\` | ✅ |
 | 自检：`UsbConfigEditor.exe --self-test` | ✅ |
 
@@ -183,7 +186,7 @@ dotnet test tests/UsbConfig.Core.Tests -c Release
 - **U 盘、USB 移动硬盘、USB 硬盘盒、读卡器**：只要以磁盘设备出现就能识别。
 - 判据：`Win32_DiskDrive.InterfaceType='USB'` **或** `PNPDeviceID` 以 `USBSTOR\` 开头
   （后者覆盖少数把接口类型报成 `SCSI` 的 USB-SATA 桥接芯片/UASP 驱动）。
-- 多分区磁盘：当前按“第一个有盘符的分区”改派；多分区建议在编辑器里手动指定具体分区。
+- 多分区磁盘：当前按“第一个有盘符的分区”改派，其余分区暂不处理；可正常导入规则（本版只处理第一个分区）。
 - 未分区/未初始化的磁盘：能识别、但不分配（没有盘符可改），需先分区格式化。
 
 ## Core 关键约定

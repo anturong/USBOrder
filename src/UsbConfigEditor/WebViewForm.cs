@@ -11,8 +11,11 @@ public sealed class WebViewForm : Form
 {
     private readonly WebView2 _webView = new() { Dock = DockStyle.Fill };
 
-    public WebViewForm()
+    private readonly string _profile;
+
+    public WebViewForm(string profile = "")
     {
+        _profile = profile;
         Text = "USB 盘符管理器";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1100, 700);
@@ -49,7 +52,7 @@ public sealed class WebViewForm : Form
             var userData = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "UsbDriveManager",
-                "EditorWebView");
+                string.IsNullOrWhiteSpace(_profile) ? "EditorWebView" : "EditorWebView-" + _profile);
 
             Directory.CreateDirectory(userData);
 
