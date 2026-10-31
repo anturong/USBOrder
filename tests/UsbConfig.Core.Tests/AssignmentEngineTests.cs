@@ -36,6 +36,12 @@ public class AssignmentEngineTests
             VolumeId = volumeId;
             return Result;
         }
+
+        public LetterAssignResult RemoveVolume(string volumeId)
+        {
+            VolumeId = volumeId;
+            return Result;
+        }
     }
 
     private static UsbDiskInfo Disk(char? letter = 'G', string vid = "0951", string pid = "1666", string serial = "SN1")
@@ -55,6 +61,7 @@ public class AssignmentEngineTests
                         VolumeId = @"\\?\Volume{11111111-2222-3333-4444-555555555555}\",
                         Label = "U",
                         SizeBytes = 16UL * 1024 * 1024 * 1024,
+                        FileSystem = "FAT32",
                     },
                 },
         };

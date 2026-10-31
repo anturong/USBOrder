@@ -143,6 +143,11 @@ internal sealed class ServiceHost : IDisposable
 
     private void ProcessDisk(UsbDiskInfo disk, string reason, bool verbose)
     {
+        // 先处理「跳过」逻辑：开关开启时摘掉应跳过分区的盘符；开关关闭时给
+        // 不再被跳过、但当前无盘符的分区补挂一个空闲盘符（相当于重新插入）。
+        RemoveSkippedPartitionLetters(disk, reason, verbose);
+        RestoreUnhiddenPartitionLetters(disk, reason, verbose);
+
         var decision = _engine!.Decide(disk, _config);
 
         switch (decision.Action)
@@ -180,6 +185,97 @@ internal sealed class ServiceHost : IDisposable
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    /// 移除「应跳过」分区的盘符，让它们从资源管理器里消失。
+    /// 按开关处理：EFI/ESP 分区（HideEfiPartitions）与无法识别分区（HideUnrecognizedPartitions）。
+    /// 只处理带盘符的分区；光驱、系统盘、正常分区一律不动。
+    /// </summary>
+    private void RemoveSkippedPartitionLetters(UsbDiskInfo disk, string reason, bool verbose)
+    {
+        foreach (var partition in disk.Partitions)
+        {
+            if (!partition.Letter.HasValue)
+            {
+                continue;
+            }
+
+            var skipAsEfi = _config.HideEfiPartitions && partition.IsEfi;
+            var skipAsUnrecognized = _config.HideUnrecognizedPartitions && partition.IsUnrecognized;
+
+            if (!skipAsEfi && !skipAsUnrecognized)
+            {
+                continue;
+            }
+
+            if (partition.VolumeId.Length == 0)
+            {
+                continue;
+            }
+
+            var kind = skipAsEfi ? "EFI/ESP" : "无法识别";
+            var result = _assigner.RemoveVolume(partition.VolumeId);
+
+            if (result.Success)
+            {
+                _log.Info($"{reason}：{disk} 已移除{kind}分区 {partition.Letter}: 的盘符 — {result.Message}");
+            }
+            else if (verbose)
+            {
+                _log.Warn($"{reason}：{disk} 移除{kind}分区 {partition.Letter}: 失败 — {result.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 关闭「跳过」开关后，给「不再被跳过、但当前没有盘符」的分区补挂一个空闲盘符。
+    /// 相当于对这块盘做了一次「重新插入」，让被摘掉盘符的分区重新可见。
+    /// 只处理无盘符、有卷标识、且不再被跳过（EFI/无法识别）的分区。
+    /// </summary>
+    private void RestoreUnhiddenPartitionLetters(UsbDiskInfo disk, string reason, bool verbose)
+    {
+        foreach (var partition in disk.Partitions)
+        {
+            // 已有盘符，无需处理。
+            if (partition.Letter.HasValue)
+            {
+                continue;
+            }
+
+            // 仍应被跳过的分区，不补挂。
+            if ((_config.HideEfiPartitions && partition.IsEfi)
+                || (_config.HideUnrecognizedPartitions && partition.IsUnrecognized))
+            {
+                continue;
+            }
+
+            if (partition.VolumeId.Length == 0)
+            {
+                continue;
+            }
+
+            var free = PickFreeLetter(disk);
+            if (free is null)
+            {
+                if (verbose)
+                {
+                    _log.Warn($"{reason}：{disk} 找不到空闲盘符，无法补挂分区 {partition}。");
+                }
+
+                continue;
+            }
+
+            var result = _assigner.AssignVolume(partition.VolumeId, free.Value);
+            if (result.Success)
+            {
+                _log.Info($"{reason}：{disk} 已补挂分区 {partition} 为 {free}:");
+            }
+            else if (verbose)
+            {
+                _log.Warn($"{reason}：{disk} 补挂分区 {partition} 失败：{result.Message}");
+            }
         }
     }
 
@@ -241,7 +337,12 @@ internal sealed class ServiceHost : IDisposable
 
     private char? EnsureTemporaryLetter(UsbDiskInfo disk, string reason, bool verbose)
     {
-        var partition = disk.Partitions.FirstOrDefault(p => p.VolumeId.Length > 0);
+        var candidates = disk.Partitions.AsEnumerable();
+        candidates = candidates.Where(p =>
+            !(_config.HideEfiPartitions && p.IsEfi)
+            && !(_config.HideUnrecognizedPartitions && p.IsUnrecognized));
+
+        var partition = candidates.FirstOrDefault(p => p.VolumeId.Length > 0);
         if (partition is null)
         {
             if (verbose)

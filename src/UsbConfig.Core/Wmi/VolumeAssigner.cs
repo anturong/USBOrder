@@ -19,6 +19,9 @@ public interface ILetterAssigner
     /// 这是唯一能处理“当前没有盘符”的卷的路径。
     /// </summary>
     LetterAssignResult AssignVolume(string volumeId, char targetLetter);
+
+    /// <summary>按卷标识移除盘符（把 DriveLetter 置空），让卷从资源管理器消失。</summary>
+    LetterAssignResult RemoveVolume(string volumeId);
 }
 
 /// <summary>
@@ -108,6 +111,55 @@ public sealed class WmiVolumeAssigner : ILetterAssigner
         catch (UnauthorizedAccessException ex)
         {
             return LetterAssignResult.Fail($"分配盘符需要管理员权限：{ex.Message}");
+        }
+        finally
+        {
+            Gate.ReleaseMutex();
+        }
+    }
+
+    public LetterAssignResult RemoveVolume(string volumeId)
+    {
+        if (string.IsNullOrWhiteSpace(volumeId))
+        {
+            return LetterAssignResult.Fail("卷标识为空，无法移除盘符。");
+        }
+
+        if (!TryEnterGate(TimeSpan.FromSeconds(15), out var gateError))
+        {
+            return LetterAssignResult.Fail(gateError ?? "等待盘符操作锁超时。");
+        }
+
+        try
+        {
+            var volume = Wmi.Single($"SELECT * FROM Win32_Volume WHERE DeviceID=\"{Wmi.Escape(volumeId)}\"");
+            if (volume is null)
+            {
+                return LetterAssignResult.Fail($"找不到卷：{volumeId}");
+            }
+
+            using (volume)
+            {
+                // 已经是空盘符则无需再改。
+                var current = volume.Text("DriveLetter");
+                if (string.IsNullOrWhiteSpace(current))
+                {
+                    return LetterAssignResult.Ok("该卷本来就没有盘符。");
+                }
+
+                volume["DriveLetter"] = null;
+                volume.Put();
+            }
+
+            return LetterAssignResult.Ok("盘符已移除。");
+        }
+        catch (ManagementException ex)
+        {
+            return LetterAssignResult.Fail($"移除盘符失败：{ex.Message}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return LetterAssignResult.Fail($"移除盘符需要管理员权限：{ex.Message}");
         }
         finally
         {

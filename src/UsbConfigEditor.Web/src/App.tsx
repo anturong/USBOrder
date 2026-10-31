@@ -468,6 +468,8 @@ export default function App() {
   const [devices, setDevices] = useState<Device[]>([])
   const [usedLetters, setUsedLetters] = useState<string[]>([])
   const [rules, setRules] = useState<Rule[]>([])
+  const [hideEfiPartitions, setHideEfiPartitions] = useState(true)
+  const [hideUnrecognizedPartitions, setHideUnrecognizedPartitions] = useState(true)
   const [volumes, setVolumes] = useState<Volume[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [draftLetter, setDraftLetter] = useState('U')
@@ -500,7 +502,7 @@ export default function App() {
     const [nextStatus, deviceResult, configResult, volumeResult] = await Promise.all([
       call<Status>('getStatus'),
       call<{ devices: Device[]; usedLetters: string[] }>('listDevices'),
-      call<{ rules: Rule[] }>('loadConfig'),
+      call<{ rules: Rule[]; hideEfiPartitions: boolean; hideUnrecognizedPartitions: boolean }>('loadConfig'),
       call<{ volumes: Volume[] }>('listVolumes'),
     ])
 
@@ -509,6 +511,8 @@ export default function App() {
     setDevices(deviceResult.devices)
     setUsedLetters(deviceResult.usedLetters)
     setRules(configResult.rules)
+    setHideEfiPartitions(configResult.hideEfiPartitions)
+    setHideUnrecognizedPartitions(configResult.hideUnrecognizedPartitions)
     setVolumes(volumeResult.volumes)
 
     const firstFree = LETTERS.find((letter) => !deviceResult.usedLetters.includes(letter))
@@ -599,7 +603,11 @@ export default function App() {
 
       if (saveAsRule) {
         const nextRules = upsertRule(rules, selected, draftLetter)
-        await call('saveConfig', { rules: nextRules })
+        await call('saveConfig', {
+          rules: nextRules,
+          hideEfiPartitions,
+          hideUnrecognizedPartitions,
+        })
         setRules(nextRules)
         notify('ok', `已应用并保存规则：${selected.name} → ${draftLetter}:`)
       } else {
@@ -613,7 +621,11 @@ export default function App() {
 
   const saveRules = () =>
     run(async () => {
-      const result = await call<{ restarted: boolean; warnings: string[] }>('saveConfig', { rules })
+      const result = await call<{ restarted: boolean; warnings: string[] }>('saveConfig', {
+        rules,
+        hideEfiPartitions,
+        hideUnrecognizedPartitions,
+      })
       notify(
         'ok',
         result.warnings.length > 0
@@ -658,7 +670,7 @@ export default function App() {
           </div>
           <div className="leading-tight">
             <div className="text-[13px] font-semibold text-neutral-900">USB 盘符管理</div>
-            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.2.5</div>
+            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.2.6</div>
           </div>
         </div>
 
@@ -818,7 +830,23 @@ export default function App() {
                           </td>
                         </tr>
                       )}
-                      {volumes.map((volume) => {
+                      {volumes
+                        .filter((volume) => {
+                          // 光驱(DriveType 5)永远显示，不受「跳过无法识别」开关影响。
+                          if (volume.driveType === 5) {
+                            return true
+                          }
+                          // 开关关闭时全部显示。
+                          if (!hideUnrecognizedPartitions) {
+                            return true
+                          }
+                          // 只对 USB 磁盘应用「无法识别」屏蔽：读不出文件系统的分区（Linux/未知格式）。
+                          if (volume.isUsb && !volume.fileSystem) {
+                            return false
+                          }
+                          return true
+                        })
+                        .map((volume) => {
                         const used = volume.sizeBytes > 0 ? volume.sizeBytes - volume.freeBytes : 0
                         const ratio = volume.sizeBytes > 0 ? used / volume.sizeBytes : 0
                         // 内置硬盘用灰色；USB 盘按「占用该盘符的设备」的状态着色（与设备/规则表一致），无设备时按自由分配（紫）。
@@ -829,12 +857,13 @@ export default function App() {
                           ? 'text-neutral-400'
                           : statusIconClass(owningDevice ? owningDevice.status : 'unmanaged')
                         return (
-                          <tr key={volume.letter} className="group border-b border-neutral-50 last:border-0">
-                            <td
-                              className="cursor-pointer px-5 py-3"
-                              onDoubleClick={() => run(async () => void (await call('openFolder', { path: `${volume.letter}:\\` })))}
-                              title="双击打开资源管理器"
-                            >
+                          <tr
+                            key={volume.letter}
+                            className="group cursor-pointer border-b border-neutral-50 last:border-0"
+                            onDoubleClick={() => run(async () => void (await call('openFolder', { path: `${volume.letter}:\\` })))}
+                            title="双击打开资源管理器"
+                          >
+                            <td className="px-5 py-3">
                               <div className="flex items-center gap-2.5">
                                 <span className="font-mono text-[13px] font-medium text-neutral-900 group-hover:text-sky-600">
                                   {volume.letter}:
@@ -879,7 +908,7 @@ export default function App() {
             <div className="mt-5">
               <Card
                 title="当前插入的设备"
-                description="选中一行后在下方指定盘符；只对当次生效，勾选后才会写入规则"
+                description="在设备列表选中要改入的设备，然后在下方指定盘符；只对当次生效，开启「保存为规则」后才会写入规则"
                 action={
                   <Button size="sm" disabled={busy} onClick={() => run(refresh)}>
                     <RefreshCw className={cx('h-3.5 w-3.5', busy && 'animate-spin')} />
@@ -986,16 +1015,27 @@ export default function App() {
                   </select>
                   <Button size="sm" variant="primary" disabled={!selected || busy} onClick={applyLetter}>
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    应用到选中设备
+                    分配临时盘符
                   </Button>
-                  <label className="inline-flex items-center gap-1.5 text-xs text-neutral-600">
-                    <input
-                      type="checkbox"
-                      checked={saveAsRule}
-                      onChange={(event) => setSaveAsRule(event.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-neutral-300"
-                    />
-                    同时保存为规则
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-neutral-600">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={saveAsRule}
+                      onClick={() => setSaveAsRule(!saveAsRule)}
+                      className={cx(
+                        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+                        saveAsRule ? 'bg-sky-600' : 'bg-neutral-200',
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                          saveAsRule ? 'translate-x-[18px]' : 'translate-x-0.5',
+                        )}
+                      />
+                    </button>
+                    开启后保存为规则
                   </label>
                 </div>
               </Card>
@@ -1127,6 +1167,71 @@ export default function App() {
 
           {tab === 'settings' && (
             <div className="mt-5 flex flex-col gap-5">
+              <Card
+                title="分区屏蔽"
+                description="开启后，分配盘符与导入设备时会跳过对应分区；光驱永远豁免。修改后点“保存并重启服务”生效"
+              >
+                <div className="divide-y divide-neutral-100 text-[13px]">
+                  <div className="flex items-center justify-between gap-6 px-5 py-3">
+                    <div>
+                      <div className="text-neutral-900">跳过 EFI/ESP 分区</div>
+                      <div className="text-xs text-neutral-500">多分区设备导入或分配时，跳过系统引导分区</div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={hideEfiPartitions}
+                      onClick={() => setHideEfiPartitions(!hideEfiPartitions)}
+                      className={cx(
+                        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+                        hideEfiPartitions ? 'bg-sky-600' : 'bg-neutral-200',
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                          hideEfiPartitions ? 'translate-x-[18px]' : 'translate-x-0.5',
+                        )}
+                      />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-6 px-5 py-3">
+                    <div>
+                      <div className="text-neutral-900">跳过无法识别的分区</div>
+                      <div className="text-xs text-neutral-500">无文件系统或容量为 0 的分区（光驱除外）</div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={hideUnrecognizedPartitions}
+                      onClick={() => setHideUnrecognizedPartitions(!hideUnrecognizedPartitions)}
+                      className={cx(
+                        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+                        hideUnrecognizedPartitions ? 'bg-sky-600' : 'bg-neutral-200',
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                          hideUnrecognizedPartitions ? 'translate-x-[18px]' : 'translate-x-0.5',
+                        )}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-6 border-t border-neutral-100 px-5 py-4">
+                  <div className="text-xs text-neutral-500">
+                    这些开关同时作用于「分配临时盘符」和「保存并重启服务」后的自动分配。
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" disabled={busy} onClick={saveRules}>
+                      保存并重启服务
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
               <Card title="路径" description="配置与日志固定在 ProgramData，卸载时保留">
                 <div className="divide-y divide-neutral-100 text-[13px]">
                   {[

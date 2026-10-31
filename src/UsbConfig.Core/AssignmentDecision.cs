@@ -36,6 +36,9 @@ public sealed class AssignmentDecision
 
     public VolumeOccupant? Occupant { get; init; }
 
+    /// <summary>产出本次决策所用的配置（供 Apply 按全局开关过滤分区）。</summary>
+    public AppConfig? Config { get; init; }
+
     public string Message { get; init; } = "";
 
     /// <summary>是否需要给当前登录用户弹系统消息框。</summary>

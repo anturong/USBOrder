@@ -42,6 +42,7 @@ UsbDriveManager/
 | Editor A2：规则编辑、从设备导入、指纹只读、校验、保存并重启（WebView2 + React） | ✅ |
 | Editor A3：现场手动改盘符 | ✅（强制覆盖竞争、多分区选择未做） |
 | 概览页：所有磁盘列表（盘符/名称/占用，按状态着色） | ✅ |
+| 分区屏蔽：跳过 EFI/ESP 与无法识别分区（开关切换即「重新插入」，光驱豁免） | ✅ |
 | 打包：`deploy/publish.ps1` 一键产出 `dist\` | ✅ |
 | 自检：`UsbConfigEditor.exe --self-test` | ✅ |
 
@@ -76,10 +77,10 @@ powershell -ExecutionPolicy Bypass -File .\deploy\publish.ps1
 
 ```powershell
 # MSI（静默部署，无交互界面）
-powershell -ExecutionPolicy Bypass -File .\deploy\build-msi.ps1 -Version 0.2.5
+powershell -ExecutionPolicy Bypass -File .\deploy\build-msi.ps1 -Version 0.2.6
 
 # setup.exe（Inno Setup 图形安装包，需先装 Inno Setup 7）
-powershell -ExecutionPolicy Bypass -File .\deploy\build-inno.ps1 -Version 0.2.5
+powershell -ExecutionPolicy Bypass -File .\deploy\build-inno.ps1 -Version 0.2.6
 ```
 
 产物都在 `release\`：
@@ -198,6 +199,10 @@ dotnet test tests/UsbConfig.Core.Tests -c Release
 - **先到先得**：目标盘符被规则内另一台设备占用时，后插者保持系统临时盘符，只记日志 + 弹窗。
 - **真冲突即拒**：被无关卷（本地盘/网络盘/光驱）占用时拒绝分配，不做自动 fallback。
 - **不做热加载**：改配置必须重启服务。
+- **分区屏蔽（切换开关 = 重新插入）**：设置页两个开关分别控制「跳过 EFI/ESP 分区」与
+  「跳过无法识别分区」（默认都开）。开 → 摘掉应跳过分区的盘符；关 → 给不再被跳过、
+  但当前无盘符的分区补挂一个空闲盘符（等价于对这块盘重新插入）。不依赖持久化记录，
+  光驱永远豁免。
 - **改盘符临界区**：`WmiVolumeAssigner` 内用命名互斥锁（优先 `Global\`）包住“检查 → 赋值”，
   服务与编辑器现场操作共用同一把锁。
 
@@ -209,6 +214,8 @@ dotnet test tests/UsbConfig.Core.Tests -c Release
 ```json
 {
   "version": 1,
+  "hideEfiPartitions": true,
+  "hideUnrecognizedPartitions": true,
   "rules": [
     {
       "id": "0f0c1f...",

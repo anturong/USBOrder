@@ -20,6 +20,7 @@ public sealed class WmiUsbDiskEnumerator : IUsbDiskEnumerator
     {
         var disks = new List<UsbDiskInfo>();
         var accessPaths = LoadPartitionAccessPaths();
+        var partitionMeta = LoadPartitionMetadata();
 
         using var searcher = new ManagementObjectSearcher(
             Wmi.Scope,
@@ -70,10 +71,18 @@ public sealed class WmiUsbDiskEnumerator : IUsbDiskEnumerator
                             volumeId = FindVolumeId(letter.Value);
                         }
 
-                        if (volumeId.Length == 0
-                            && accessPaths.TryGetValue((diskIndex, partitionIndex + 1), out var accessPath))
+                        var gptType = Guid.Empty;
+                        if (accessPaths.TryGetValue((diskIndex, partitionIndex + 1), out var accessPath))
                         {
-                            volumeId = accessPath;
+                            if (volumeId.Length == 0)
+                            {
+                                volumeId = accessPath;
+                            }
+                        }
+
+                        if (partitionMeta.TryGetValue((diskIndex, partitionIndex + 1), out var meta))
+                        {
+                            gptType = meta;
                         }
 
                         if (volumeId.Length == 0)
@@ -88,6 +97,7 @@ public sealed class WmiUsbDiskEnumerator : IUsbDiskEnumerator
                             Label = label,
                             SizeBytes = partitionSize,
                             FileSystem = fileSystem,
+                            GptType = gptType,
                         });
                     }
                 }
@@ -154,6 +164,40 @@ public sealed class WmiUsbDiskEnumerator : IUsbDiskEnumerator
         catch
         {
             // 存储命名空间不可用时退回按盘符/容量匹配。
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// 从 MSFT_Partition 读取每个分区的 GPT 分区类型 GUID（用于识别 EFI/ESP）。
+    /// 返回磁盘号+分区号 → GptType 的映射；MBR 磁盘或读取失败时对应项缺失。
+    /// </summary>
+    private static Dictionary<(int Disk, int Partition), Guid> LoadPartitionMetadata()
+    {
+        var map = new Dictionary<(int Disk, int Partition), Guid>();
+
+        try
+        {
+            foreach (var partition in Wmi.QueryInScope(
+                         @"root\Microsoft\Windows\Storage",
+                         "SELECT DiskNumber, PartitionNumber, GptType FROM MSFT_Partition"))
+            {
+                using (partition)
+                {
+                    var diskNumber = partition.Int32("DiskNumber");
+                    var partitionNumber = partition.Int32("PartitionNumber");
+
+                    if (Guid.TryParse(partition.Text("GptType"), out var gptType))
+                    {
+                        map[(diskNumber, partitionNumber)] = gptType;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // 读取失败时不区分 EFI，按原逻辑处理。
         }
 
         return map;

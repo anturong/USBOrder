@@ -174,6 +174,8 @@ internal sealed class EditorBridge
 
         return new
         {
+            hideEfiPartitions = config.HideEfiPartitions,
+            hideUnrecognizedPartitions = config.HideUnrecognizedPartitions,
             rules = config.Rules.Select(rule =>
             {
                 // 名称统一用当前设备的型号：上下两处（设备表 / 规则表）对同一台盘显示同一个名字。
@@ -229,6 +231,9 @@ internal sealed class EditorBridge
     private static object SaveConfig(JsonObject? parameters)
     {
         var config = new AppConfig();
+
+        config.HideEfiPartitions = parameters?["hideEfiPartitions"]?.GetValue<bool>() ?? true;
+        config.HideUnrecognizedPartitions = parameters?["hideUnrecognizedPartitions"]?.GetValue<bool>() ?? true;
 
         if (parameters?["rules"] is JsonArray rules)
         {
@@ -333,7 +338,14 @@ internal sealed class EditorBridge
             throw new InvalidOperationException($"{letter}: 已被 {occupant.Description} 占用。");
         }
 
-        var volumeId = disk.Partitions.FirstOrDefault(partition => partition.VolumeId.Length > 0)?.VolumeId
+        var config = TryLoadConfig() ?? AppConfig.CreateDefault();
+
+        var candidates = disk.Partitions.AsEnumerable();
+        candidates = candidates.Where(p =>
+            !(config.HideEfiPartitions && p.IsEfi)
+            && !(config.HideUnrecognizedPartitions && p.IsUnrecognized));
+
+        var volumeId = candidates.FirstOrDefault(partition => partition.VolumeId.Length > 0)?.VolumeId
                        ?? throw new InvalidOperationException("该设备没有可用的卷（可能未分区或未格式化）。");
 
         var result = new WmiVolumeAssigner().AssignVolume(volumeId, letter);

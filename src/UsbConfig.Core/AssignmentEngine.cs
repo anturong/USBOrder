@@ -70,6 +70,7 @@ public sealed class AssignmentEngine
                 Rule = rule,
                 TargetLetter = target,
                 Occupant = occupant,
+                Config = config,
                 Message = $"分配 {target}: 给 {disk.Identity.DisplayId}。",
             };
         }
@@ -113,9 +114,18 @@ public sealed class AssignmentEngine
             return LetterAssignResult.Fail("当前决策不需要分配。");
         }
 
+        // 先按全局开关过滤掉应跳过的分区（EFI/ESP、无法识别），再挑目标分区。
+        var candidates = decision.Disk.Partitions;
+        if (decision.Config is not null)
+        {
+            candidates = candidates.Where(p =>
+                !(decision.Config.HideEfiPartitions && p.IsEfi)
+                && !(decision.Config.HideUnrecognizedPartitions && p.IsUnrecognized)).ToList();
+        }
+
         // 优先选已经有盘符的分区（多分区盘保持原有语义），否则选第一个有卷标识的分区。
-        var partition = decision.Disk.Partitions.FirstOrDefault(p => p.Letter.HasValue && p.VolumeId.Length > 0)
-                        ?? decision.Disk.Partitions.FirstOrDefault(p => p.VolumeId.Length > 0);
+        var partition = candidates.FirstOrDefault(p => p.Letter.HasValue && p.VolumeId.Length > 0)
+                        ?? candidates.FirstOrDefault(p => p.VolumeId.Length > 0);
 
         if (partition is null)
         {
