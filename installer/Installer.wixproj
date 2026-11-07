@@ -3,7 +3,7 @@
     <OutputType>Package</OutputType>
     <InstallerPlatform>x64</InstallerPlatform>
     <TargetName>UsbDriveManager</TargetName>
-    <DefineConstants>ProductVersion=0.1.4</DefineConstants>
+    <DefineConstants>ProductVersion=0.2.7</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

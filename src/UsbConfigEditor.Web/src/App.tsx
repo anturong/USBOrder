@@ -670,7 +670,7 @@ export default function App() {
           </div>
           <div className="leading-tight">
             <div className="text-[13px] font-semibold text-neutral-900">USB 盘符管理</div>
-            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.2.6</div>
+            <div className="text-[11px] text-neutral-500">配置编辑器 · v0.2.7</div>
           </div>
         </div>
 

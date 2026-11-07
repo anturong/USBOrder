@@ -10,7 +10,7 @@
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File deploy/build-msi.ps1
-    powershell -ExecutionPolicy Bypass -File deploy/build-msi.ps1 -Version 0.2.6
+    powershell -ExecutionPolicy Bypass -File deploy/build-msi.ps1 -Version 0.2.7
 #>
 [CmdletBinding()]
 param(
@@ -18,7 +18,7 @@ param(
 
     [string]$NugetSource = '',
 
-    [string]$Version = '0.2.6',
+    [string]$Version = '0.2.7',
 
     [string]$Output = ''
 )
