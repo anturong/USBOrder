@@ -55,6 +55,8 @@ function Invoke-Publish([string]$Project, [string]$Target) {
         '-r', 'win-x64',
         '--self-contained', 'true',
         '-o', $Target,
+        # 交付包不需要调试符号：直接从源头不生成，避免依赖事后删除。
+        '-p:DebugType=None', '-p:DebugSymbols=false',
         '--nologo'
     )
 
@@ -107,8 +109,18 @@ Invoke-Publish $editorProject $Output
 Write-Step '发布服务（自包含 win-x64）'
 Invoke-Publish $serviceProject $serviceOutput
 
-# 发布目录里会有一些调试符号，交付包不需要。
-Get-ChildItem -Path $Output -Recurse -Include *.pdb -File | Remove-Item -Force -ErrorAction SilentlyContinue
+# 发布目录里可能有调试符号，交付包不需要。
+# 注意：不要用「Get-ChildItem ... | Remove-Item -Force -ErrorAction SilentlyContinue」——
+# 实测该管道形式在本机会被安全策略静默拦截，pdb 会悄悄留在 dist 里，
+# 而 MSI / Inno / portable zip 都是全量扫描 dist，于是被一并打进安装包（0.2.6、0.2.7 首发包均如此）。
+# 改用显式 -LiteralPath 逐个删除，并在下方校验阶段断言 dist 中不再有 pdb。
+$symbols = @(Get-ChildItem -LiteralPath $Output -Recurse -Filter '*.pdb' -File -ErrorAction SilentlyContinue)
+foreach ($symbol in $symbols) {
+    Remove-Item -LiteralPath $symbol.FullName -Force -ErrorAction Stop
+}
+if ($symbols.Count -gt 0) {
+    Write-Step "已移除 $($symbols.Count) 个调试符号文件（*.pdb）"
+}
 
 Write-Step '校验产物'
 
@@ -130,6 +142,12 @@ if (Test-Path $serviceController) {
     if ($controllerSize -lt 60000) {
         throw "System.ServiceProcess.ServiceController.dll 是引用程序集（$controllerSize 字节），发布异常"
     }
+}
+
+# 防回归：调试符号不得进入交付包（下游三个打包脚本都是全量扫描 dist）。
+$remainingSymbols = @(Get-ChildItem -LiteralPath $Output -Recurse -Filter '*.pdb' -File -ErrorAction SilentlyContinue)
+if ($remainingSymbols.Count -gt 0) {
+    throw "dist 中仍有 $($remainingSymbols.Count) 个 .pdb，交付包会被污染：$($remainingSymbols[0].FullName)"
 }
 
 $size = (Get-ChildItem $Output -Recurse -File | Measure-Object -Property Length -Sum).Sum

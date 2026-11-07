@@ -47,9 +47,18 @@ powercfg /s SCHEME_CURRENT
 
 | 文件 | SHA256 |
 |---|---|
-| `USBOrder-0.2.7-setup.exe` | `3da846eedd85b3413fc1eef38956abaebf621ec6bc62e4caf07b35c9447b869c` |
-| `USBOrder-0.2.7-win-x64.msi` | `4e543b3f614dcb92972406285be1fe2c845baf0ef84428a571c891ea7ccd2c33` |
-| `USBOrder-0.2.7-portable-win-x64.zip` | `572765f10807fcd377564c9e9375775241dc04f4c283818415df3f63265e2c18` |
+| `USBOrder-0.2.7-setup.exe` | `61561490672171301917619a86ea5c322ed0cf4be0ab6837ae1e7863b7a6984f` |
+| `USBOrder-0.2.7-win-x64.msi` | `27a29bfd7f1a8e40e9413b2e8dffbe0193248d3beddcaa57b3b376fe8061d6cf` |
+| `USBOrder-0.2.7-portable-win-x64.zip` | `d731c1e72ca090955c701c29d3ef5741c85adf1d7df020a3c004c8b53875009a` |
+
+### 重发说明（2026-11-07 14:42）
+
+本页所列安装包为 **0.2.7 重发包**，替换同日早些时候上传的首发包。功能代码完全一致，差异只在打包结果：
+
+- 首发包的 `deploy/publish.ps1` 用 `Get-ChildItem … | Remove-Item -ErrorAction SilentlyContinue` 清理 `*.pdb`，该管道形式在本机被安全策略静默拦截，4 个项目调试符号（约 100 KB）留在 `dist\`；而 MSI（WiX）、setup.exe（Inno）、portable zip 都是全量扫描 `dist`，于是被一并打进了安装包。0.2.6 也受同样影响。
+- 现改为三层防护：`dotnet publish` 直接传 `-p:DebugType=None -p:DebugSymbols=false`（源头不生成）；残留符号用显式 `-LiteralPath` 删除，删除失败立即报错而不是静默吞掉；发布校验阶段断言 `dist` 中不再有 `.pdb`，否则终止构建。
+- 重发包已验证 `dist` 中 0 个 pdb、WiX `Generated.wxs` 中 0 处 pdb 引用、portable zip 中 0 个 pdb 条目；三个包各比首发包小约 40–60 KB。
+- **已安装首发包的用户无需重装**：pdb 只是调试符号，不参与运行，功能与安全行为完全相同。上表校验和仅适用于重发包。
 
 ---
 
