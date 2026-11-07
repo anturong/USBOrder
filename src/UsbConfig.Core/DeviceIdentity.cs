@@ -94,6 +94,34 @@ public static class SerialRules
 
         return hasAlphanumeric;
     }
+
+    /// <summary>
+    /// 判定序列号是否适合当作「跨 USB 端口」的稳定身份键。
+    /// <see cref="IsUsable"/> 只排除垃圾值；桥接芯片常见的全零、全 F、十六进制递增占位串
+    /// 虽然可用，但同型号多块盘会重复，不能单独用来认定同一台设备。
+    /// </summary>
+    public static bool IsStable(string? raw)
+    {
+        var value = Normalize(raw);
+        if (!IsUsable(value) || value.Length < 6)
+        {
+            return false;
+        }
+
+        // 全同字符（0000000000000000 / FFFFFFFF）不是唯一身份。
+        if (value.All(ch => ch == value[0]))
+        {
+            return false;
+        }
+
+        // 0123456789ABCDEF 这类固件默认递增串同样会重复。
+        const string hexRun = "0123456789ABCDEF";
+        var upper = value.ToUpperInvariant();
+        var isHexRun = upper.Length >= 8
+                       && upper.Where((ch, index) => ch != hexRun[index % 16]).Any() == false;
+
+        return !isHexRun;
+    }
 }
 
 /// <summary>从 PnP 设备实例名里解析 VID/PID、厂商与序列号。</summary>
@@ -178,7 +206,9 @@ public static partial class PnpIdParser
 /// </summary>
 public static class DeviceIdentityResolver
 {
-    private const int MaxParentDepth = 4;
+    // 换 USB 口（尤其经过级联 Hub / 不同控制器）后设备树层级会变深，
+    // 4 层常常够不到 USB\VID_... 节点，导致指纹为空或取到中间 Hub 的 VID/PID。
+    private const int MaxParentDepth = 10;
 
     public static DeviceIdentity Resolve(
         string? pnpDeviceId,

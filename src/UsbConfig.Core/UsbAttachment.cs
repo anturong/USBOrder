@@ -8,7 +8,9 @@ namespace UsbDriveManager.Core;
 /// </summary>
 public static class UsbAttachment
 {
-    private const int MaxParentDepth = 6;
+    // 级联 Hub / 前面板 / Thunderbolt 扩展坞会让磁盘到 USB\ 祖先的距离超过 6 层，
+    // 深度不足时 UAS/SCSI 盘会被误判成非 USB 磁盘，整块盘从枚举结果里消失。
+    private const int MaxParentDepth = 12;
 
     public static bool IsUsbAttached(
         string? pnpDeviceId,

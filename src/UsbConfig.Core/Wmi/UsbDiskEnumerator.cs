@@ -117,6 +117,45 @@ public sealed class WmiUsbDiskEnumerator : IUsbDiskEnumerator
         return disks;
     }
 
+    /// <summary>
+    /// 诊断用：列出所有物理磁盘、USB 挂接判定结果与解析出的设备指纹。
+    /// 不参与业务，只写进服务日志。设备反复掉线时，仅看 <see cref="Enumerate"/> 的结果
+    /// 无法区分「Windows 没枚举到这块盘」和「盘在但被 USB 判定过滤掉了」。
+    /// </summary>
+    public static IReadOnlyList<string> DescribeAllDisks()
+    {
+        var lines = new List<string>();
+
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                Wmi.Scope,
+                "SELECT DeviceID, Model, PNPDeviceID, SerialNumber, InterfaceType FROM Win32_DiskDrive");
+
+            foreach (ManagementObject disk in searcher.Get())
+            {
+                using (disk)
+                {
+                    var pnp = disk.Text("PNPDeviceID");
+                    var iface = disk.Text("InterfaceType");
+                    var serial = disk.Text("SerialNumber");
+                    var attached = UsbAttachment.IsUsbAttached(pnp, iface);
+                    var identity = DeviceIdentityResolver.Resolve(pnp, serial);
+
+                    lines.Add(
+                        $"{disk.Text("DeviceID")} | {disk.Text("Model")} | {iface} | USB={attached}"
+                        + $" | 指纹={identity} | SN={serial} | PNP={pnp}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"枚举 Win32_DiskDrive 失败：{ex.Message}");
+        }
+
+        return lines;
+    }
+
     private static char? ParseLetter(string deviceId)
     {
         if (deviceId.Length >= 2 && deviceId[1] == ':' && char.IsLetter(deviceId[0]))

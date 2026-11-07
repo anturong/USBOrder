@@ -27,6 +27,7 @@ internal static class Program
         Section("2. 盘符占用反查（只读）", InspectLetters);
         Section("3. 决策分支", DecisionChecks);
         Section("4. 配置读写与校验", ConfigChecks);
+        Section("5. 换 USB 口后的指纹回退", PortChangeChecks);
 
         Console.WriteLine();
         Console.WriteLine(_failed == 0 ? "全部通过 ✔" : $"失败 {_failed} 项 ✘");
@@ -247,6 +248,41 @@ internal static class Program
                 // 忽略清理失败。
             }
         }
+    }
+
+    /// <summary>换 USB 口后父设备树漂移时的规则匹配行为（不依赖现场设备）。</summary>
+    private static void PortChangeChecks()
+    {
+        var rule = new DriveRule
+        {
+            Name = "D 盘", Vid = "2109", Pid = "0715", Serial = "000000136623", TargetLetter = 'D',
+        };
+        var config = new AppConfig { Rules = { rule } };
+
+        Check("稳定序列号：真实 SN", () => SerialRules.IsStable("000000136623"));
+        Check("稳定序列号：拒绝全零占位串", () => !SerialRules.IsStable("000000000000"));
+        Check("稳定序列号：拒绝递增占位串", () => !SerialRules.IsStable("0123456789ABCDEF"));
+        Check("稳定序列号：拒绝端口派生值", () => !SerialRules.IsStable("6&29B12556"));
+
+        Check("精确指纹仍优先命中", () => ReferenceEquals(
+            config.FindMatch(new DeviceIdentity { Vid = "2109", Pid = "0715", Serial = "000000136623" }), rule));
+
+        Check("VID/PID 漂移后按稳定 SN 回退", () => ReferenceEquals(
+            config.FindMatch(new DeviceIdentity { Vid = "8086", Pid = "464E", Serial = "000000136623" }), rule));
+
+        Check("占位 SN 不触发回退", () => config.FindMatch(
+            new DeviceIdentity { Vid = "8086", Pid = "464E", Serial = "0123456789ABCDEF" }) is null);
+
+        var ambiguous = new AppConfig
+        {
+            Rules =
+            {
+                new DriveRule { Vid = "1111", Pid = "1111", Serial = "SN-STABLE-1", TargetLetter = 'D' },
+                new DriveRule { Vid = "2222", Pid = "2222", Serial = "SN-STABLE-1", TargetLetter = 'M' },
+            },
+        };
+        Check("同 SN 多条规则时不回退", () => ambiguous.FindMatch(
+            new DeviceIdentity { Vid = "3333", Pid = "3333", Serial = "SN-STABLE-1" }) is null);
     }
 
     private static string CreateScratchDirectory()

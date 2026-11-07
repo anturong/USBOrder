@@ -21,6 +21,11 @@ internal sealed class ServiceHost : IDisposable
     private readonly Dictionary<string, DateTimeOffset> _lastNotify = new(StringComparer.OrdinalIgnoreCase);
     private static readonly TimeSpan NotifyThrottle = TimeSpan.FromMinutes(2);
 
+    // 「未命中规则」日志按设备节流，避免 10 秒巡检反复刷同一条。
+    private readonly Dictionary<string, DateTimeOffset> _lastUnmatchedLog = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _arrivalLock = new();
+    private CancellationTokenSource? _pendingArrival;
+
     private VolumeChangeWatcher? _watcher;
     private Timer? _reconcileTimer;
     private AssignmentEngine? _engine;
@@ -95,9 +100,29 @@ internal sealed class ServiceHost : IDisposable
                 return;
             }
 
-            _log.Info($"插入事件：{e.DriveName}，等待 500ms 让卷就绪");
-            await Task.Delay(500).ConfigureAwait(false);
-            await ProcessAsync("插入事件", verbose: true).ConfigureAwait(false);
+            // 接触不良 / 供电不足时 Windows 会连续播插入音，短时间涌来大量 Arrival 事件。
+            // 每次都全量枚举 WMI 既刷日志，又可能在卷尚未就绪时给半枚举状态的分区改盘符。
+            // 去抖：只保留最后一次事件，等设备安静 1.5s 再扫描一遍（兜底巡检仍在，不会漏）。
+            CancellationTokenSource pending;
+            lock (_arrivalLock)
+            {
+                _pendingArrival?.Cancel();
+                pending = new CancellationTokenSource();
+                _pendingArrival = pending;
+            }
+
+            _log.Info($"插入事件：{e.DriveName}，去抖等待 1.5s（设备稳定后再扫描）");
+
+            try
+            {
+                await Task.Delay(1500, pending.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return; // 已被后续插入事件取代
+            }
+
+            await ProcessAsync("插入事件(去抖)", verbose: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -115,6 +140,17 @@ internal sealed class ServiceHost : IDisposable
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
+            // 只在插入事件 / 启动扫描时留快照：巡检每 10 秒一次，写全量会刷屏。
+            // 快照包含「被 USB 判定过滤掉的盘」，这样下次再遇到盘不识别，
+            // 一眼就能分清是 Windows 没枚举到，还是程序把它过滤 / 指纹漂移了。
+            if (verbose)
+            {
+                foreach (var line in WmiUsbDiskEnumerator.DescribeAllDisks())
+                {
+                    _log.Info($"{reason}：磁盘快照 {line}");
+                }
+            }
+
             var disks = new WmiUsbDiskEnumerator().Enumerate();
             if (disks.Count == 0)
             {
@@ -179,13 +215,36 @@ internal sealed class ServiceHost : IDisposable
                 break;
 
             default:
-                if (verbose)
+                if (decision.Action == AssignmentAction.SkipNoRule)
+                {
+                    // 换口后指纹漂移会静默走到这里；以前完全不留日志，现场无从判断。
+                    if (ShouldLogUnmatched(disk.PnpDeviceId))
+                    {
+                        _log.Warn($"{reason}：{disk} — {decision.Message} "
+                                  + $"指纹={disk.Identity} SN稳定={SerialRules.IsStable(disk.Identity.Serial)} "
+                                  + $"PNP={disk.PnpDeviceId}");
+                    }
+                }
+                else if (verbose)
                 {
                     _log.Info($"{reason}：{disk} — {decision.Message}");
                 }
 
                 break;
         }
+    }
+
+    private bool ShouldLogUnmatched(string key)
+    {
+        var now = DateTimeOffset.Now;
+
+        if (_lastUnmatchedLog.TryGetValue(key, out var last) && now - last < NotifyThrottle)
+        {
+            return false;
+        }
+
+        _lastUnmatchedLog[key] = now;
+        return true;
     }
 
     /// <summary>
@@ -409,6 +468,12 @@ internal sealed class ServiceHost : IDisposable
 
         _reconcileTimer?.Dispose();
         _reconcileTimer = null;
+
+        lock (_arrivalLock)
+        {
+            _pendingArrival?.Cancel();
+            _pendingArrival = null;
+        }
 
         if (_watcher is not null)
         {

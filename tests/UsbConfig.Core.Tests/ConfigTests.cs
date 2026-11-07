@@ -152,3 +152,61 @@ public class ConfigValidatorTests
         Assert.Contains(issues, i => i.Severity == ValidationSeverity.Error && i.Message.Contains("同一设备指纹"));
     }
 }
+
+/// <summary>换 USB 口导致 PnP 父设备树漂移时的规则匹配行为。</summary>
+public class PortChangeMatchingTests
+{
+    private static AppConfig Config(params DriveRule[] rules) => new() { Rules = rules.ToList() };
+
+    private static DeviceIdentity Device(string vid, string pid, string serial)
+        => new() { Vid = vid, Pid = pid, Serial = serial };
+
+    [Fact]
+    public void ExactFingerprint_StillWins()
+    {
+        var rule = new DriveRule { Vid = "2109", Pid = "0715", Serial = "000000136623", TargetLetter = 'D' };
+        var other = new DriveRule { Vid = "152D", Pid = "0583", Serial = "A1B2C3D4E5", TargetLetter = 'M' };
+
+        Assert.Same(rule, Config(rule, other).FindMatch(Device("2109", "0715", "000000136623")));
+    }
+
+    [Fact]
+    public void VidPidDrift_FallsBackToStableSerial()
+    {
+        // 同一块 UAS 硬盘盒换到另一个 USB 控制器后，父设备树上取到的 VID/PID 变了，
+        // 但 SCSI INQUIRY 上报的序列号与端口无关 —— 仍应命中 D: 规则。
+        var rule = new DriveRule { Vid = "2109", Pid = "0715", Serial = "000000136623", TargetLetter = 'D' };
+
+        Assert.Same(rule, Config(rule).FindMatch(Device("8086", "464E", "000000136623")));
+    }
+
+    [Fact]
+    public void PlaceholderSerial_DoesNotFallback()
+    {
+        // 桥接芯片固件默认的占位串不是唯一身份，不能靠它跨端口认设备。
+        var rule = new DriveRule { Vid = "152D", Pid = "0583", Serial = "0123456789ABCDEF", TargetLetter = 'M' };
+
+        Assert.Null(Config(rule).FindMatch(Device("2109", "0715", "0123456789ABCDEF")));
+        Assert.Null(Config(rule).FindMatch(Device("2109", "0715", "0000000000000000")));
+    }
+
+    [Fact]
+    public void AmbiguousStableSerial_DoesNotFallback()
+    {
+        var a = new DriveRule { Vid = "1111", Pid = "1111", Serial = "SN-STABLE-1", TargetLetter = 'D' };
+        var b = new DriveRule { Vid = "2222", Pid = "2222", Serial = "SN-STABLE-1", TargetLetter = 'M' };
+
+        Assert.Null(Config(a, b).FindMatch(Device("3333", "3333", "SN-STABLE-1")));
+    }
+
+    [Theory]
+    [InlineData("000000136623", true)]
+    [InlineData("4E078AD056C9", true)]
+    [InlineData("000000000000", false)]
+    [InlineData("0123456789ABCDEF", false)]
+    [InlineData("6&29B12556", false)]
+    [InlineData("ABC", false)]
+    [InlineData(null, false)]
+    public void StableSerial_RejectsPlaceholders(string? raw, bool expected)
+        => Assert.Equal(expected, SerialRules.IsStable(raw));
+}
